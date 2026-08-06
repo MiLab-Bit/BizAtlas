@@ -1,0 +1,49 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+
+# Env & secrets
+.env
+*.pem
+*.key
+
+# Runtime data
+data/*.sqlite
+data/*.db
+data/*.log
+data/*.err
+data/*.json
+*.sqlite
+*.db
+content/index.sqlite
+uploads/
+exports/
+logs/
+
+# Node (若后续 React)
+node_modules/
+apps/web/dist/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Local scratch
+.tmp/
+.cache/
+.tools/
+
+# Frontend
+apps/web/node_modules/
+apps/web/dist/

@@ -1,0 +1,17 @@
+name,value,unit
+流动比率,0.85,ratio
+速动比率,0.55,ratio
+资产负债率,0.78,ratio
+利息保障倍数,1.2,ratio
+ROE,0.02,ratio
+毛利率,0.09,ratio
+经营现金流/净利润,-0.3,ratio
+商誉占比,0.35,ratio
+客户集中度,0.62,ratio
+供应商集中度,0.45,ratio
+产能利用率,0.48,ratio
+行业营收增速,-0.08,ratio
+担保链层级,4,count
+对外担保比例,0.66,ratio
+关联交易占比,0.27,ratio
+股权质押率,0.72,ratio

@@ -1,0 +1,85 @@
+rules:
+- id: P8517902
+  name: 自定义：流动比率 < 0.9
+  dimension: 财务
+  severity: 高
+  status: pilot
+  contribute_to_score: false
+  condition:
+    type: threshold
+    metric: 流动比率
+    op: <
+    value: 0.9
+  message: 流动比率小于 0.9 高风险
+  source: nl_compiler
+  version: pilot
+- id: P5216188
+  name: 自定义：流动比率 < 0.9
+  dimension: 财务
+  severity: 高
+  status: pilot
+  contribute_to_score: false
+  condition:
+    type: threshold
+    metric: 流动比率
+    op: <
+    value: 0.9
+  message: 流动比率小于 0.9 高风险
+  source: nl_compiler
+  version: pilot
+- id: P5999391
+  name: 自定义：流动比率 < 0.9
+  dimension: 财务
+  severity: 高
+  status: pilot
+  contribute_to_score: false
+  condition:
+    type: threshold
+    metric: 流动比率
+    op: <
+    value: 0.9
+  message: 流动比率小于 0.9 高风险
+  source: nl_compiler
+  version: pilot
+- id: P5421883
+  name: 自定义：商誉占比 > 0.25
+  dimension: 财务
+  severity: 中
+  status: active
+  contribute_to_score: true
+  condition:
+    type: threshold
+    metric: 商誉占比
+    op: '>'
+    value: 0.25
+  message: 如果商誉占比超 25% 就预警
+  source: nl_compiler
+  version: pilot
+- id: P7497275
+  name: 自定义：流动比率 < 0.9
+  dimension: 财务
+  severity: 高
+  status: pilot
+  contribute_to_score: false
+  condition:
+    type: threshold
+    metric: 流动比率
+    op: <
+    value: 0.9
+  message: 流动比率小于 0.9 高风险
+  source: nl_compiler
+  version: pilot
+- id: P5567498
+  name: 自定义：流动比率 < 0.9
+  dimension: 财务
+  severity: 高
+  status: pilot
+  contribute_to_score: false
+  condition:
+    type: threshold
+    metric: 流动比率
+    op: <
+    value: 0.9
+  message: 流动比率小于 0.9 高风险
+  source: nl_compiler_llm
+  version: pilot

@@ -1,0 +1,37 @@
+id: due_diligence
+name: 贷前尽调
+description: 资料清单 → 解析 → 研判 → 报告 → 人工复核 → 提交
+stages:
+  - id: checklist
+    name: 资料清单
+  - id: ready
+    name: 资料齐套
+  - id: analyzed
+    name: 风险研判
+  - id: reported
+    name: 报告草稿
+  - id: awaiting_human
+    name: 人工复核
+  - id: submitted
+    name: 已提交
+
+checklist:
+  - id: financial_metrics
+    label: 近一期财务指标（CSV/财报抽取）
+    required: true
+    source: metrics
+  - id: company_profile
+    label: 企业基本信息（名称/行业）
+    required: true
+    source: company
+  - id: risk_events
+    label: 司法/失信等事件（可 fixtures 或后续 API）
+    required: false
+    source: events
+  - id: charter
+    label: 公司章程（可选）
+    required: false
+    source: manual
+
+# ORANGE 及以上要求人工确认才能提交
+gate_grade_for_submit: ["ORANGE", "RED", "BLACK"]

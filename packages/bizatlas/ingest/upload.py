@@ -1,0 +1,72 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from bizatlas.contracts.models import MetricValue
+from bizatlas.data import repo
+from bizatlas.ingest.excel_metrics import parse_metrics_excel
+from bizatlas.ingest.pdf_metrics import parse_metrics_document
+
+SUPPORTED_SUFFIXES = {".csv", ".tsv", ".txt", ".pdf"}
+
+
+def ingest_metrics_file(company_id: str, filename: str, content: bytes) -> dict:
+    suffix = Path(filename).suffix.lower()
+    if suffix not in SUPPORTED_SUFFIXES:
+        raise ValueError(
+            f"支持格式：{', '.join(sorted(SUPPORTED_SUFFIXES))}。"
+            "CSV 用 name,value；PDF/TXT 用关键指标中文表述。"
+            "模板见 content/templates/"
+        )
+
+    dest_dir = repo.upload_dir_for(company_id)
+    dest = dest_dir / filename
+    dest.write_bytes(content)
+
+    metrics: list[MetricValue]
+    parser = "csv"
+    if suffix in {".csv", ".tsv"}:
+        metrics = parse_metrics_excel(dest)
+        parser = "csv"
+    else:
+        metrics = parse_metrics_document(dest)
+        parser = "pdf_text" if suffix == ".pdf" else "text"
+
+    if not metrics:
+        repo.save_document(company_id, filename, dest, status="failed")
+        raise ValueError(
+            "未解析到任何指标。CSV 请检查表头 name,value；"
+            "PDF/TXT 请包含如「流动比率」「资产负债率」等字段。"
+        )
+
+    for m in metrics:
+        if m.source:
+            m.source.ref = dest.name
+
+    count = repo.replace_metrics(company_id, metrics)
+    doc_id = repo.save_document(company_id, filename, dest, status="parsed")
+
+    # index for local RAG
+    try:
+        from bizatlas.rag.simple import index_text
+
+        if suffix in {".pdf", ".txt"}:
+            text = dest.read_text(encoding="utf-8", errors="ignore") if suffix == ".txt" else None
+            if text is None:
+                from bizatlas.ingest.pdf_metrics import extract_text_from_pdf
+
+                text = extract_text_from_pdf(dest)
+            index_text(doc_id, text or "")
+        else:
+            # csv: index as plain text rows
+            index_text(doc_id, dest.read_text(encoding="utf-8-sig", errors="ignore"))
+    except Exception:  # noqa: BLE001
+        pass
+
+    return {
+        "document_id": doc_id,
+        "filename": filename,
+        "parser": parser,
+        "metrics_count": count,
+        "metrics": [m.model_dump(mode="json") for m in metrics],
+    }

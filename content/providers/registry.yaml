@@ -1,0 +1,114 @@
+# BizAtlas 数据源注册表（占位）
+# 配密钥时：改 enabled / 填 .env 对应变量即可逐个点亮
+# 实现约定：packages/data/providers/<id>.py 读取本表 + 环境变量
+
+version: 1
+
+providers:
+  # ---------- P0：始终可用 / 本地 ----------
+  - id: upload
+    name: 用户上传解析
+    tier: L1
+    enabled: true          # 主源，勿关
+    needs_key: false
+    env: []
+    serves: [financial, operating, documents]
+    status: ready          # ready | stub | disabled
+
+  - id: fixture
+    name: 演示案例 Fixtures
+    tier: L2
+    enabled: true
+    needs_key: false
+    env: []
+    serves: [financial, judicial, related, sentiment]
+    status: ready
+
+  - id: industry_static
+    name: 静态行业参数
+    tier: L3
+    enabled: true
+    needs_key: false
+    env: []
+    serves: [industry]
+    status: ready          # content/industry/benchmarks.yaml
+
+  # ---------- P0：财务 API（逐个配）----------
+  - id: akshare
+    name: AKShare 财务
+    tier: L1
+    enabled: false         # ← pip install akshare 后改为 true，并调 /v1/providers/akshare/fetch
+    needs_key: false
+    env: []
+    serves: [financial, industry]
+    status: ready
+    notes: 实现已就绪；默认关闭，按需启用
+
+  - id: tushare
+    name: Tushare Pro 财务
+    tier: L1
+    enabled: false
+    needs_key: true
+    env: [TUSHARE_TOKEN]
+    serves: [financial]
+    status: stub
+    notes: 有积分时优先于 akshare
+
+  # ---------- P1：工商司法（二选一主用）----------
+  - id: tianyancha
+    name: 天眼查
+    tier: L1
+    enabled: true
+    needs_key: true
+    env: [TIANYANCHA_TOKEN]
+    serves: [company_basic, judicial, related]
+    status: ready
+    notes: 背调主源；与 qichacha 只启用一个
+
+  - id: qichacha
+    name: 企查查
+    tier: L1
+    enabled: false
+    needs_key: true
+    env: [QICHACHA_TOKEN]
+    serves: [company_basic, judicial, related]
+    status: stub
+
+  - id: company_json_import
+    name: 工商司法 JSON 导入
+    tier: L2
+    enabled: true
+    needs_key: false
+    env: []
+    serves: [company_basic, judicial, related]
+    status: stub
+    notes: 无商业 Key 时用导出包；路径见 COMPANY_JSON_DIR
+
+  # ---------- P1：公告 ----------
+  - id: cninfo
+    name: 巨潮公告
+    tier: L1
+    enabled: false
+    needs_key: false
+    env: []
+    serves: [announcements]
+    status: stub
+
+  # ---------- P2：舆情 ----------
+  - id: news_akshare
+    name: 新闻舆情（AKShare 通道）
+    tier: L1
+    enabled: false
+    needs_key: false
+    env: []
+    serves: [sentiment]
+    status: stub
+
+# 字段解析优先级（高 → 低）；未启用的自动跳过
+resolve_order:
+  financial: [upload, tushare, akshare, fixture, industry_static]
+  judicial: [tianyancha, qichacha, company_json_import, fixture]
+  related: [tianyancha, qichacha, company_json_import, fixture]
+  industry: [industry_static, akshare, fixture]
+  sentiment: [news_akshare, fixture]
+  announcements: [cninfo, upload, fixture]
