@@ -87,15 +87,15 @@ web ↛ data providers / API keys
 
 | 路径 | 角色 |
 |---|---|
-| `企研漫游指南/00–10` | PRD 权威 |
-| `企研漫游指南/BizAtlas/` | 本工程 |
+| `商舆漫游指南/00–10` | PRD 权威 |
+| `商舆漫游指南/BizAtlas/` | 本工程 |
 | Web3QuantMaster（若本机有） | 复用参考，不作为运行时 submodule 强依赖 |
 
 ---
 
 ## 4. 命名
 
-- 产品对外：企研通 / Qiyan Agent  
+- 产品对外：商舆 / ShangYu Agent
 - 仓库与包前缀：`bizatlas`  
 - Python 包名：`bizatlas_contracts` / `bizatlas_risk` … 或 `packages.*` 本地 editable
 

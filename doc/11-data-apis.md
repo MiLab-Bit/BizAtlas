@@ -129,7 +129,7 @@ MVP 默认 `BIZATLAS_MODE=hybrid`：有 token 用真源，无 token 自动 fixtu
 
 ## 7. 一句话
 
-**接「上传 + AKShare/Tushare 财务双源 + 一家工商司法 + 巨潮公告」就够撑起企研通五能力；其余全部后置。** 答辩用 fixtures 托底，不把命运绑在爬虫稳定性上。
+**接「上传 + AKShare/Tushare 财务双源 + 一家工商司法 + 巨潮公告」就够撑起商舆五能力；其余全部后置。** 答辩用 fixtures 托底，不把命运绑在爬虫稳定性上。
 
 ---
 

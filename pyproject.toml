@@ -1,7 +1,7 @@
 [project]
 name = "bizatlas"
 version = "0.1.0"
-description = "企研通 BizAtlas — enterprise research & risk agent"
+description = "商舆 BizAtlas — enterprise research & risk agent"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
