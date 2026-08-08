@@ -95,7 +95,7 @@ web ↛ data providers / API keys
 
 ## 4. 命名
 
-- 产品对外：商舆 / ShangYu Agent
+- 产品对外：商舆 / BizAtlas
 - 仓库与包前缀：`bizatlas`  
 - Python 包名：`bizatlas_contracts` / `bizatlas_risk` … 或 `packages.*` 本地 editable
 
