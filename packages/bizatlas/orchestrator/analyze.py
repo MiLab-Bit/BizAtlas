@@ -163,13 +163,34 @@ def run_analyze(req: AnalyzeRequest) -> dict[str, Any]:
     }
 
 
-def generate_onepager_report(company_id: str, *, confirm_export: bool = False) -> dict[str, Any]:
-    result = run_analyze(
-        AnalyzeRequest(
-            company_id=company_id,
-            intent="analyze_risk",
-            template_id="risk_onepager",
-            options={"include_stress": False},
+def generate_onepager_report(
+    company_id: str,
+    *,
+    confirm_export: bool = False,
+    use_pipeline: bool = False,
+) -> dict[str, Any]:
+    from bizatlas.agents.pipeline import run_analysis_pipeline
+
+    opts: dict[str, Any] = {"include_stress": False}
+    if use_pipeline:
+        opts["use_pipeline"] = True
+    result = (
+        run_analysis_pipeline(
+            AnalyzeRequest(
+                company_id=company_id,
+                intent="analyze_risk",
+                template_id="risk_onepager",
+                options=opts,
+            )
+        )
+        if use_pipeline
+        else run_analyze(
+            AnalyzeRequest(
+                company_id=company_id,
+                intent="analyze_risk",
+                template_id="risk_onepager",
+                options=opts,
+            )
         )
     )
     payload = result.get("onepager") or {}
@@ -183,6 +204,11 @@ def generate_onepager_report(company_id: str, *, confirm_export: bool = False) -
         )
     except Exception:  # noqa: BLE001
         pass
+    # 多 Agent 流水线产出（writer-only 叙事 + 失败感知披露）注入报告
+    if use_pipeline:
+        payload["narrative"] = result.get("narrative") or {}
+        payload["disclosures"] = result.get("disclosures") or []
+        payload["pipeline_mode"] = result.get("pipeline_mode")
     cid = (result.get("company") or {}).get("id") or company_id
     status = "exported" if confirm_export else "generated"
     report_id = repo.save_report(cid, "risk_onepager", payload, status=status)
@@ -225,13 +251,34 @@ def generate_onepager_report(company_id: str, *, confirm_export: bool = False) -
     }
 
 
-def generate_credit_report(company_id: str, *, confirm_export: bool = False) -> dict[str, Any]:
-    result = run_analyze(
-        AnalyzeRequest(
-            company_id=company_id,
-            intent="analyze_risk",
-            template_id="credit_assessment",
-            options={"include_stress": False},
+def generate_credit_report(
+    company_id: str,
+    *,
+    confirm_export: bool = False,
+    use_pipeline: bool = False,
+) -> dict[str, Any]:
+    from bizatlas.agents.pipeline import run_analysis_pipeline
+
+    opts: dict[str, Any] = {"include_stress": False}
+    if use_pipeline:
+        opts["use_pipeline"] = True
+    result = (
+        run_analysis_pipeline(
+            AnalyzeRequest(
+                company_id=company_id,
+                intent="analyze_risk",
+                template_id="credit_assessment",
+                options=opts,
+            )
+        )
+        if use_pipeline
+        else run_analyze(
+            AnalyzeRequest(
+                company_id=company_id,
+                intent="analyze_risk",
+                template_id="credit_assessment",
+                options=opts,
+            )
         )
     )
     metrics = result.get("metrics") or []
@@ -251,6 +298,11 @@ def generate_credit_report(company_id: str, *, confirm_export: bool = False) -> 
         )
     except Exception:  # noqa: BLE001
         pass
+    # 多 Agent 流水线产出注入报告
+    if use_pipeline:
+        payload["narrative"] = result.get("narrative") or {}
+        payload["disclosures"] = result.get("disclosures") or []
+        payload["pipeline_mode"] = result.get("pipeline_mode")
     cid = (result.get("company") or {}).get("id") or company_id
     status = "exported" if confirm_export else "generated"
     report_id = repo.save_report(cid, "credit_assessment", payload, status=status)
