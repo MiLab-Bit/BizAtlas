@@ -26,3 +26,7 @@ htmlcov/
 .idea/
 .vscode/
 .DS_Store
+
+# Secrets (keep .env.example tracked, ignore real .env)
+.env
+.env.*

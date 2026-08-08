@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     api_port: int = 8000
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
+    # —— 阶段 3：企业化部署鉴权 ——
+    # bizatlas_auth_disabled 默认 True：保持旧演示/前端无感（等价 ADMIN 放行）。
+    # 生产部署：设 bizatlas_auth_disabled=false 并提供 bizatlas_auth_secret，
+    # 端点即启用 RBAC。
+    bizatlas_auth_disabled: bool = True
+    bizatlas_auth_secret: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
@@ -23,12 +23,22 @@ from bizatlas.rules.store import activate_rule, load_all_rules, save_pilot_rule
 from bizatlas.workflow.due_diligence import (
     advance_due_diligence,
     get_due_diligence,
+    review_due_diligence,
     start_due_diligence,
 )
 
+from bizatlas.auth.rbac import Action, Principal, Role
+from bizatlas.observability import observe
+from bizatlas.observability.metrics import default_metrics
+from bizatlas.service.health import liveness, readiness
+from bizatlas.tools.builtins import register_default_tools
+from bizatlas.tools.permissions import matrix_summary
+from apps.api.auth_deps import get_principal, guard, guard_review
+from apps.api.observability_middleware import ObservabilityMiddleware
+
 settings = get_settings()
 
-app = FastAPI(title="BizAtlas API", version="0.2.0")
+app = FastAPI(title="BizAtlas API", version="0.3.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list or ["*"],
@@ -36,6 +46,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# 阶段 3：可观测中间件（请求 ID / 计数 / 耗时 / 结构化访问日志）
+app.add_middleware(ObservabilityMiddleware)
 
 
 class CreateCompanyRequest(BaseModel):
@@ -93,9 +105,16 @@ class AdvanceWorkflowRequest(BaseModel):
     manual_flags: dict[str, bool] | None = None
 
 
+class ReviewRequest(BaseModel):
+    decision: str  # approve | reject | return
+    comment: str = ""
+
+
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
+    # 阶段 3：填充受治理工具注册表（权限+熔断+沙箱）
+    register_default_tools()
 
 
 @app.get("/v1/health")
@@ -126,6 +145,31 @@ def health() -> Envelope[HealthData]:
 @app.get("/v1/fixtures")
 def fixtures() -> Envelope[list[str]]:
     return Envelope(ok=True, data=list_fixtures(), meta={"mode": settings.bizatlas_mode})
+
+
+# —— 阶段 3：高可用健康探针（liveness/readiness 分离）——
+@app.get("/v1/health/live")
+def health_live() -> Envelope[dict]:
+    return Envelope(ok=True, data=liveness(), meta={"mode": settings.bizatlas_mode})
+
+
+@app.get("/v1/health/ready")
+def health_ready() -> Envelope[dict]:
+    data = readiness()
+    return Envelope(ok=data["status"] == "ok", data=data, meta={"mode": settings.bizatlas_mode})
+
+
+@app.get("/v1/metrics")
+def metrics(fmt: str = "prometheus") -> Response:
+    """可观测指标：默认 Prometheus 文本格式，?fmt=json 返回结构化快照。"""
+    m = default_metrics()
+    if fmt == "json":
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(m.snapshot())
+    from fastapi.responses import PlainTextResponse
+
+    return PlainTextResponse(m.as_prometheus(), media_type="text/plain; version=0.0.4")
 
 
 @app.get("/v1/companies")
@@ -167,6 +211,7 @@ async def upload_document(
 
 
 @app.post("/v1/analyze")
+@observe("api.analyze")
 def analyze(req: AnalyzeRequest) -> Envelope[dict]:
     try:
         result = run_analyze(req)
@@ -185,7 +230,16 @@ def analyze(req: AnalyzeRequest) -> Envelope[dict]:
 
 
 @app.post("/v1/reports")
-def create_report(req: ReportRequest) -> Envelope[dict]:
+def create_report(
+    req: ReportRequest,
+    principal: Principal = Depends(get_principal),
+) -> Envelope[dict]:
+    # 阶段 3：落盘导出属于敏感操作，需要 export_reports 权限
+    if req.confirm and not principal.can(Action.EXPORT_REPORTS):
+        raise HTTPException(
+            status_code=403,
+            detail=f"role {principal.role.value} 无权导出报告（需要 reports:export）",
+        )
     try:
         if req.template_id == "credit_assessment":
             result = generate_credit_report(req.company_id, confirm_export=req.confirm)
@@ -280,7 +334,10 @@ def background_chat(req: BackgroundChatRequest) -> Envelope[dict]:
 
 
 @app.post("/v1/rules/from-nl")
-def rules_from_nl(req: NlRuleRequest) -> Envelope[dict]:
+def rules_from_nl(
+    req: NlRuleRequest,
+    principal: Principal = Depends(guard(Action.MANAGE_RULES)),
+) -> Envelope[dict]:
     try:
         rule = compile_rule_from_nl(req.text)
         saved = save_pilot_rule(rule)
@@ -296,7 +353,11 @@ def rules_from_nl(req: NlRuleRequest) -> Envelope[dict]:
 
 
 @app.post("/v1/rules/{rule_id}/activate")
-def rules_activate(rule_id: str, confirm: bool = False) -> Envelope[dict]:
+def rules_activate(
+    rule_id: str,
+    confirm: bool = False,
+    principal: Principal = Depends(guard(Action.MANAGE_RULES)),
+) -> Envelope[dict]:
     if not confirm:
         raise HTTPException(status_code=409, detail="激活规则需要 confirm=true")
     try:
@@ -307,7 +368,10 @@ def rules_activate(rule_id: str, confirm: bool = False) -> Envelope[dict]:
 
 
 @app.post("/v1/providers/akshare/fetch")
-def akshare_fetch(req: AkshareFetchRequest) -> Envelope[dict]:
+def akshare_fetch(
+    req: AkshareFetchRequest,
+    principal: Principal = Depends(guard(Action.TOOL_CALL)),
+) -> Envelope[dict]:
     from bizatlas.contracts.models import DataTier, MetricSource, MetricValue
     from bizatlas.data.providers_akshare import fetch_stock_basic_metrics
 
@@ -436,6 +500,43 @@ def workflow_advance(workflow_id: str, req: AdvanceWorkflowRequest) -> Envelope[
         ok=True,
         data=data,
         meta={"action": req.action, "human_gate": req.action == "submit"},
+    )
+
+
+@app.post("/v1/workflows/{workflow_id}/review")
+def workflow_review(
+    workflow_id: str,
+    req: ReviewRequest,
+    principal: Principal = Depends(guard_review()),
+) -> Envelope[dict]:
+    """人工复核状态机（阶段 0 内核）接入 RBAC：仅 reviewer/admin 可操作。"""
+    try:
+        data = review_due_diligence(
+            workflow_id,
+            reviewer=principal.user_id,
+            decision=req.decision,
+            comment=req.comment,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return Envelope(
+        ok=True,
+        data=data,
+        meta={"reviewer": principal.user_id, "decision": req.decision},
+    )
+
+
+@app.get("/v1/admin/rbac")
+def admin_rbac(principal: Principal = Depends(guard(Action.ADMIN))) -> Envelope[dict]:
+    """管理端点（阶段 3）：查看角色-权限矩阵，需 admin 权限。"""
+    return Envelope(
+        ok=True,
+        data={
+            "matrix": matrix_summary(),
+            "roles": [r.value for r in Role],
+            "actions": [a.value for a in Action],
+        },
+        meta={"viewer": principal.user_id},
     )
 
 
