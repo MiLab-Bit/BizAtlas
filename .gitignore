@@ -1,49 +1,25 @@
 # Python
-.venv/
-venv/
 __pycache__/
-*.py[cod]
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-dist/
-build/
+*.pyc
+.venv/
+bizvenv/
+venv/
 
-# Env & secrets
-.env
-*.pem
-*.key
-
-# Runtime data
-data/*.sqlite
-data/*.db
-data/*.log
-data/*.err
-data/*.json
+# Local data & DB (runtime artifacts)
+data/
 *.sqlite
 *.db
-content/index.sqlite
-uploads/
+
+# Exports & integrity receipts (generated at runtime)
 exports/
-logs/
+*.integrity.json
 
-# Node (若后续 React)
-node_modules/
-apps/web/dist/
+# Test / coverage
+.coverage
+htmlcov/
+.pytest_cache/
 
-# IDE / OS
+# Editor / OS
 .idea/
 .vscode/
 .DS_Store
-Thumbs.db
-*.swp
-
-# Local scratch
-.tmp/
-.cache/
-.tools/
-
-# Frontend
-apps/web/node_modules/
-apps/web/dist/

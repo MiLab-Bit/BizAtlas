@@ -17,6 +17,7 @@ from bizatlas.risk.conflicts import detect_conflicts
 from bizatlas.risk.score import score_risk
 from bizatlas.risk.stress import run_stress
 from bizatlas.rules.engine import RuleEngine
+from bizatlas.contracts.integrity import sign
 
 
 def _resolve_inputs(
@@ -190,6 +191,7 @@ def generate_onepager_report(company_id: str, *, confirm_export: bool = False) -
     export_path = None
     docx_path = None
     pdf_path = None
+    integrity = None
     if confirm_export:
         out_md = repo.export_dir() / f"{report_id}_onepager.md"
         out_md.write_text(markdown, encoding="utf-8")
@@ -200,6 +202,12 @@ def generate_onepager_report(company_id: str, *, confirm_export: bool = False) -
         out_pdf = repo.export_dir() / f"{report_id}_onepager.pdf"
         export_report_pdf(payload, out_pdf, kind="onepager")
         pdf_path = str(out_pdf)
+        # 报告防篡改：对导出载荷签名，落盘 .integrity.json，供独立复核
+        rec = sign(report_id, payload)
+        (repo.export_dir() / f"{report_id}_onepager.integrity.json").write_text(
+            rec.model_dump_json(), encoding="utf-8"
+        )
+        integrity = rec.model_dump()
 
     return {
         "report_id": report_id,
@@ -211,6 +219,7 @@ def generate_onepager_report(company_id: str, *, confirm_export: bool = False) -
         "export_path": export_path,
         "docx_path": docx_path,
         "pdf_path": pdf_path,
+        "integrity": integrity,
         "summary": result.get("summary"),
         "company": result.get("company"),
     }
@@ -247,6 +256,7 @@ def generate_credit_report(company_id: str, *, confirm_export: bool = False) -> 
     report_id = repo.save_report(cid, "credit_assessment", payload, status=status)
     export_path = None
     pdf_path = None
+    integrity = None
     if confirm_export:
         out = repo.export_dir() / f"{report_id}_credit.docx"
         export_credit_docx(payload, out)
@@ -254,6 +264,12 @@ def generate_credit_report(company_id: str, *, confirm_export: bool = False) -> 
         out_pdf = repo.export_dir() / f"{report_id}_credit.pdf"
         export_report_pdf(payload, out_pdf, kind="credit")
         pdf_path = str(out_pdf)
+        rec = sign(report_id, payload)
+        (repo.export_dir() / f"{report_id}_credit.integrity.json").write_text(
+            rec.model_dump_json(), encoding="utf-8"
+        )
+        integrity = rec.model_dump()
+
     return {
         "report_id": report_id,
         "status": status,
@@ -262,6 +278,7 @@ def generate_credit_report(company_id: str, *, confirm_export: bool = False) -> 
         "credit": payload,
         "docx_path": export_path,
         "pdf_path": pdf_path,
+        "integrity": integrity,
         "summary": result.get("summary"),
         "company": result.get("company"),
     }

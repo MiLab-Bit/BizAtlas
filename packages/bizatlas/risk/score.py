@@ -9,6 +9,7 @@ from bizatlas.contracts.models import (
     RiskGrade,
     RiskResult,
     RuleHit,
+    ScoringSnapshot,
     VetoInfo,
 )
 
@@ -86,6 +87,16 @@ def score_risk(
     total_m = max(1, len(metrics))
     tier_mix = {k: round(v / total_m, 2) for k, v in tier_counts.items()}
 
+    # 归集本次结论关联的全部证据 id（用于证据覆盖率校验 / 发布门禁）
+    evidence_refs: list[str] = []
+    for h in hits:
+        evidence_refs.extend(h.evidence_refs or [])
+    for m in metrics:
+        evidence_refs.extend(getattr(m, "evidence_refs", []) or [])
+    # 去重保序
+    seen: set[str] = set()
+    evidence_refs = [e for e in evidence_refs if not (e in seen or seen.add(e))]
+
     return RiskResult(
         company_id=company_id,
         grade=grade,
@@ -98,6 +109,12 @@ def score_risk(
             completeness=round(min(1.0, len(metrics) / 8), 2),
             conflicts=conflicts,
             tier_mix=tier_mix,
+        ),
+        evidence_refs=evidence_refs,
+        scoring=ScoringSnapshot(
+            scoring_version="1.0.0",
+            weight_snapshot=dict(DIMENSION_WEIGHTS),
+            severity_snapshot=dict(SEVERITY_SCORE),
         ),
         computed_at=datetime.now(UTC),
     )

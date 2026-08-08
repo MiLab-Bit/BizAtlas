@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,15 @@ from bizatlas.contracts.models import AnalyzeRequest
 from bizatlas.data import repo
 from bizatlas.ingest.fixtures import load_fixture_company
 from bizatlas.orchestrator.analyze import generate_onepager_report, run_analyze
+
+
+# 需要强制人工复核的高风险等级（研判/出报告时打标，提交前必须 approve）
+REVIEW_REQUIRED_GRADES = {"ORANGE", "RED", "BLACK"}
+REVIEW_DECISIONS = {"approve", "reject", "return"}
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 def _template_path() -> Path:
@@ -95,6 +105,11 @@ def _snapshot(workflow_id: str) -> dict[str, Any]:
         "report": payload.get("report"),
         "blockers": payload.get("blockers") or [],
         "history": payload.get("history") or [],
+        "review": payload.get("review"),
+        "review_passed": payload.get("review_passed", False),
+        "requires_review": payload.get("requires_review", False),
+        "audit_trail": payload.get("audit_trail") or [],
+        "remediation_tasks": payload.get("remediation_tasks") or [],
         "updated_at": row.get("updated_at"),
     }
 
@@ -145,6 +160,106 @@ def start_due_diligence(
 
 
 def get_due_diligence(workflow_id: str) -> dict[str, Any]:
+    return _snapshot(workflow_id)
+
+
+def _build_remediation_tasks(risk: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """从风险命中生成整改工单（对标 AuditPilot 的整改闭环）。
+
+    每个命中规则 → 一张工单，含负责人角色 / 优先级 / 时限 / 验收口径。
+    """
+    if not risk:
+        return []
+    hits = risk.get("hits") or []
+    tasks: list[dict[str, Any]] = []
+    for i, hit in enumerate(hits, 1):
+        severity = str(hit.get("severity") or "中")
+        priority = {"高": "P0", "中": "P1", "低": "P2"}.get(severity, "P1")
+        due_days = {"高": 7, "中": 14, "低": 30}.get(severity, 14)
+        owner = {
+            "财务": "财务复核岗",
+            "经营": "经营分析岗",
+            "行业": "行业研究岗",
+            "舆情": "舆情监控岗",
+            "关联": "合规岗",
+        }.get(str(hit.get("dimension") or ""), "风控岗")
+        tasks.append(
+            {
+                "task_id": f"REM-{i:02d}",
+                "title": str(hit.get("name") or hit.get("message") or "风险整改"),
+                "detail": str(hit.get("message") or ""),
+                "dimension": str(hit.get("dimension") or ""),
+                "severity": severity,
+                "priority": priority,
+                "owner": owner,
+                "due_days": due_days,
+                "success_metric": "该维度指标回到安全阈值内并提交复核",
+                "status": "未开始",
+            }
+        )
+    return tasks
+
+
+def review_due_diligence(
+    workflow_id: str,
+    *,
+    reviewer: str,
+    decision: str,
+    comment: str = "",
+) -> dict[str, Any]:
+    """人工复核状态机（对标 AuditPilot 的 add_review）。
+
+    decision:
+      - approve：通过复核，允许提交（设 review_passed）
+      - reject ：驳回，阻断提交（终态，需重新走流程）
+      - return ：退回修改，stage 回退到 analyzed 重新研判
+    每次决策追加到 audit_trail（复核人 / 决策 / 意见 / 时间），驱动 lifecycle 流转。
+    """
+    if decision not in REVIEW_DECISIONS:
+        raise ValueError(f"unknown decision: {decision}，应为 {sorted(REVIEW_DECISIONS)}")
+    row = repo.get_workflow(workflow_id)
+    if not row:
+        raise ValueError(f"workflow not found: {workflow_id}")
+    payload = row.get("payload") or {}
+    payload.setdefault("history", [])
+    payload.setdefault("audit_trail", [])
+    payload.setdefault("manual_flags", {})
+
+    entry = {
+        "action": "review",
+        "reviewer": reviewer,
+        "decision": decision,
+        "comment": comment,
+        "at": _now_iso(),
+    }
+    payload["audit_trail"].append(entry)
+    review_status = {
+        "approve": "approved",
+        "reject": "rejected",
+        "return": "returned",
+    }[decision]
+    payload["review"] = {
+        "status": review_status,
+        "reviewer": reviewer,
+        "decided_at": _now_iso(),
+        "comment": comment,
+    }
+
+    stage = row["stage"]
+    if decision == "approve":
+        payload["review_passed"] = True
+    elif decision == "return":
+        payload["review_passed"] = False
+        stage = "analyzed"  # 退回重新研判
+    elif decision == "reject":
+        payload["review_passed"] = False
+        # 驳回：生成整改工单，提交被阻断
+        payload["remediation_tasks"] = _build_remediation_tasks(
+            (payload.get("analyze") or {}).get("risk")
+        )
+
+    payload["history"].append({"action": "review", "decision": decision, "reviewer": reviewer})
+    repo.save_workflow(row["template_id"], row["company_id"], stage, payload, workflow_id=workflow_id)
     return _snapshot(workflow_id)
 
 
@@ -211,6 +326,10 @@ def advance_due_diligence(
             "markdown_preview": (report.get("markdown") or "")[:1200],
         }
         stage = "awaiting_human"
+        grade = ((payload.get("analyze") or {}).get("summary") or {}).get("grade")
+        if grade in REVIEW_REQUIRED_GRADES:
+            payload["requires_review"] = True
+            payload.setdefault("review_passed", False)
         payload["history"].append({"action": "report", "report_id": report.get("report_id")})
 
     elif action == "submit":
@@ -218,6 +337,9 @@ def advance_due_diligence(
             raise ValueError("提交需要 confirm=true（人在回路）")
         if not payload.get("report"):
             raise ValueError("请先生成报告草稿")
+        # 高风险结论：提交前必须通过人工复核（人在回路硬门禁）
+        if payload.get("requires_review") and not payload.get("review_passed"):
+            raise ValueError("高风险结论需先通过人工复核（review_due_diligence approve）")
         grade = ((payload.get("analyze") or {}).get("summary") or {}).get("grade")
         gate = set(template.get("gate_grade_for_submit") or [])
         # always require confirm; gate grades just annotate
