@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bizatlas.contracts.models import MetricValue
+from bizatlas.contracts.models import Evidence, MetricValue
 from bizatlas.data import repo
 from bizatlas.ingest.excel_metrics import parse_metrics_excel
-from bizatlas.ingest.pdf_metrics import parse_metrics_document
+from bizatlas.ingest.pdf_metrics import parse_metrics_document, parse_pdf_with_evidence
+from bizatlas.ingest.vision import run_vision_pipeline
 
 SUPPORTED_SUFFIXES = {".csv", ".tsv", ".txt", ".pdf"}
 
@@ -24,13 +25,24 @@ def ingest_metrics_file(company_id: str, filename: str, content: bytes) -> dict:
     dest.write_bytes(content)
 
     metrics: list[MetricValue]
+    evidences: list[Evidence] = []
     parser = "csv"
+    vision = None
+    pages: int | None = None
     if suffix in {".csv", ".tsv"}:
         metrics = parse_metrics_excel(dest)
         parser = "csv"
+    elif suffix == ".pdf":
+        parsed = parse_pdf_with_evidence(dest)
+        metrics = parsed.metrics
+        evidences = parsed.evidences
+        pages = len(parsed.pages)
+        parser = "pdf_text"
+        # 阶段 1：视觉优先分支（扫描件/印章/复杂表格检测；默认降级）
+        vision = run_vision_pipeline(dest, dest.name).model_dump(mode="json")
     else:
         metrics = parse_metrics_document(dest)
-        parser = "pdf_text" if suffix == ".pdf" else "text"
+        parser = "text"
 
     if not metrics:
         repo.save_document(company_id, filename, dest, status="failed")
@@ -44,6 +56,8 @@ def ingest_metrics_file(company_id: str, filename: str, content: bytes) -> dict:
             m.source.ref = dest.name
 
     count = repo.replace_metrics(company_id, metrics)
+    if evidences:
+        repo.save_evidence(company_id, evidences)
     doc_id = repo.save_document(company_id, filename, dest, status="parsed")
 
     # index for local RAG
@@ -68,5 +82,8 @@ def ingest_metrics_file(company_id: str, filename: str, content: bytes) -> dict:
         "filename": filename,
         "parser": parser,
         "metrics_count": count,
+        "evidence_count": len(evidences),
+        "pages": pages,
+        "vision": vision,
         "metrics": [m.model_dump(mode="json") for m in metrics],
     }

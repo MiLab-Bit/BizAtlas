@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS financial_metrics (
   tier TEXT,
   as_of TEXT,
   source_json TEXT,
+  evidence_refs TEXT,
   FOREIGN KEY(company_id) REFERENCES companies(id)
 );
 
@@ -126,6 +127,20 @@ CREATE TABLE IF NOT EXISTS workflows (
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(company_id) REFERENCES companies(id)
 );
+
+CREATE TABLE IF NOT EXISTS evidence (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL,
+  evidence_id TEXT NOT NULL,
+  source_type TEXT,
+  doc_id TEXT,
+  page INTEGER,
+  bbox TEXT,
+  doc_sha256 TEXT,
+  content_snippet TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(company_id) REFERENCES companies(id)
+);
 """
 
 
@@ -144,6 +159,12 @@ def init_db(db_path: str | None = None) -> Path:
     conn = get_connection(str(path))
     try:
         conn.executescript(SCHEMA)
+        # 轻量迁移：CREATE TABLE IF NOT EXISTS 不会改动旧表结构，
+        # 新增列用 ALTER 补（列已存在时静默跳过）。
+        try:
+            conn.execute("ALTER TABLE financial_metrics ADD COLUMN evidence_refs TEXT")
+        except sqlite3.OperationalError:
+            pass
         conn.commit()
     finally:
         conn.close()

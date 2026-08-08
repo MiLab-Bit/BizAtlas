@@ -32,6 +32,15 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = "gpt-4o-mini"
 
+    # 视觉解析分支（阶段 1）：默认关闭。开启后 PDF 解析会先做扫描件/印章/复杂表格
+    # 检测；若检测到非纯文本版面且配置了 vision_backend，则走视觉抽取（带 bbox 坐标）。
+    # 关闭或后端未配置时自动降级到纯文本解析，不影响现有逻辑。
+    vision_enabled: bool = False
+    vision_backend: str = ""  # vlm | ocr | ""（空=纯文本降级）
+    vision_api_base: str = ""
+    vision_api_key: str = ""
+    vision_model: str = ""
+
     api_host: str = "127.0.0.1"
     api_port: int = 8000
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"

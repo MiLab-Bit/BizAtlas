@@ -5,13 +5,13 @@ __pycache__/
 bizvenv/
 venv/
 
-# Local data & DB (runtime artifacts)
-data/
+# Local data & DB (runtime artifacts at repo root, NOT packages/bizatlas/data source dir)
+/data/
 *.sqlite
 *.db
 
 # Exports & integrity receipts (generated at runtime)
-exports/
+/exports/
 *.integrity.json
 
 # Test / coverage

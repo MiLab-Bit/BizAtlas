@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from bizatlas.config import get_settings
-from bizatlas.contracts.models import MetricValue
+from bizatlas.contracts.models import Evidence, MetricValue
 from bizatlas.data.db import get_connection
 
 
@@ -27,6 +27,53 @@ def create_company(name: str, industry: str = "") -> dict[str, Any]:
     finally:
         conn.close()
     return {"id": company_id, "name": name, "industry": industry}
+
+
+def save_evidence(company_id: str, evidence: list[Evidence]) -> int:
+    """持久化证据链：每条 MetricValue/RuleHit 关联的 Evidence 落到 evidence 表。
+
+    阶段 1 之前，RiskResult.evidence_refs 只是孤儿 ID；现在解析阶段真正产出
+    并存储 Evidence，证据链才闭合、可审计（见 contracts/integrity 防篡改）。
+    """
+    if not evidence:
+        return 0
+    conn = get_connection()
+    try:
+        for ev in evidence:
+            conn.execute(
+                "INSERT INTO evidence "
+                "(id, company_id, evidence_id, source_type, doc_id, page, bbox, doc_sha256, content_snippet, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    f"ev-{uuid.uuid4().hex[:12]}",
+                    company_id,
+                    ev.evidence_id,
+                    ev.source_type,
+                    ev.doc_id,
+                    ev.page,
+                    ev.bbox,
+                    ev.doc_sha256,
+                    ev.content_snippet,
+                    _now(),
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    return len(evidence)
+
+
+def list_evidence(company_id: str) -> list[Evidence]:
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT evidence_id, source_type, doc_id, page, bbox, doc_sha256, content_snippet, created_at "
+            "FROM evidence WHERE company_id = ? ORDER BY created_at ASC",
+            (company_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [Evidence(**dict(r)) for r in rows]
 
 
 def get_company(company_id: str) -> dict[str, Any] | None:
@@ -81,8 +128,8 @@ def replace_metrics(company_id: str, metrics: list[MetricValue]) -> int:
             mid = f"m-{uuid.uuid4().hex[:12]}"
             conn.execute(
                 "INSERT INTO financial_metrics "
-                "(id, company_id, name, value, unit, tier, as_of, source_json) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "(id, company_id, name, value, unit, tier, as_of, source_json, evidence_refs) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     mid,
                     company_id,
@@ -92,6 +139,7 @@ def replace_metrics(company_id: str, metrics: list[MetricValue]) -> int:
                     m.tier.value,
                     m.as_of.isoformat() if m.as_of else None,
                     m.source.model_dump_json() if m.source else "{}",
+                    json.dumps(m.evidence_refs or [], ensure_ascii=False),
                 ),
             )
         conn.commit()
@@ -106,8 +154,8 @@ def load_metrics(company_id: str) -> list[MetricValue]:
     conn = get_connection()
     try:
         rows = conn.execute(
-            "SELECT name, value, unit, tier, as_of, source_json FROM financial_metrics "
-            "WHERE company_id = ?",
+            "SELECT name, value, unit, tier, as_of, source_json, evidence_refs "
+            "FROM financial_metrics WHERE company_id = ?",
             (company_id,),
         ).fetchall()
     finally:
@@ -117,6 +165,7 @@ def load_metrics(company_id: str) -> list[MetricValue]:
     for r in rows:
         src_raw = json.loads(r["source_json"] or "{}")
         source = MetricSource(**src_raw) if src_raw else None
+        ev_refs = json.loads(r["evidence_refs"] or "[]") if r["evidence_refs"] else []
         out.append(
             MetricValue(
                 name=r["name"],
@@ -124,6 +173,7 @@ def load_metrics(company_id: str) -> list[MetricValue]:
                 unit=r["unit"] or "",
                 tier=DataTier(r["tier"] or "L1"),
                 source=source,
+                evidence_refs=ev_refs,
                 confidence=0.95,
             )
         )
