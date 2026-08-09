@@ -1,8 +1,9 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@/shared/ui";
 import { login, register } from "@/shared/lib/auth";
+import { requestVerification } from "@/shared/lib/api";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -11,21 +12,58 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [nickname, setNickname] = useState("");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
+  const [needsVerify, setNeedsVerify] = useState(false);
+  const [verifyAddr, setVerifyAddr] = useState("");
   const [busy, setBusy] = useState(false);
+
+  function switchMode(next: "login" | "register") {
+    setMode(next);
+    setError("");
+    setInfo("");
+    setNeedsVerify(false);
+  }
+
+  async function resendVerification() {
+    setError("");
+    setBusy(true);
+    try {
+      await requestVerification(verifyAddr.trim());
+      setInfo("验证邮件已重新发送，请查收（若邮箱已验证或不存在则静默忽略）。");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError("");
+    setInfo("");
+    setNeedsVerify(false);
     setBusy(true);
     try {
       if (mode === "login") {
         await login(email.trim(), password);
+        navigate("/");
       } else {
-        await register(email.trim(), password, nickname.trim() || undefined);
+        const outcome = await register(email.trim(), password, nickname.trim() || undefined);
+        if (outcome.status === "needs_verification") {
+          setNeedsVerify(true);
+          setVerifyAddr(outcome.email);
+          setInfo("注册成功，请查收验证邮件以激活账户后再登录。");
+        } else {
+          navigate("/");
+        }
       }
-      navigate("/");
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      if (mode === "login" && /verif/i.test(msg)) {
+        setNeedsVerify(true);
+        setVerifyAddr(email.trim());
+      }
+      setError(msg);
     } finally {
       setBusy(false);
     }
@@ -79,20 +117,45 @@ export function LoginPage() {
               />
             </label>
             {error && <p className="text-sm text-destructive">{error}</p>}
+            {info && <p className="text-sm text-foreground">{info}</p>}
             <Button type="submit" disabled={busy} className="mt-1">
-              {busy ? "处理中…" : mode === "login" ? "登录" : "注册并登录"}
+              {busy ? "处理中…" : mode === "login" ? "登录" : "注册"}
             </Button>
           </form>
-          <button
-            type="button"
-            onClick={() => {
-              setMode(mode === "login" ? "register" : "login");
-              setError("");
-            }}
-            className="mt-3 text-sm text-muted-foreground underline-offset-4 hover:underline"
-          >
-            {mode === "login" ? "没有账号？去注册" : "已有账号？去登录"}
-          </button>
+
+          {needsVerify && (
+            <div className="mt-3 flex flex-col gap-2 rounded-md border border-border bg-accent/40 p-3">
+              <p className="text-sm text-foreground">
+                该邮箱尚未验证。请查收验证邮件并点击链接激活；若未收到：
+              </p>
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={resendVerification}
+                className="w-full"
+              >
+                {busy ? "处理中…" : "重发验证邮件"}
+              </Button>
+            </div>
+          )}
+
+          <div className="mt-3 flex items-center justify-between text-sm">
+            <button
+              type="button"
+              onClick={() => switchMode(mode === "login" ? "register" : "login")}
+              className="text-muted-foreground underline-offset-4 hover:underline"
+            >
+              {mode === "login" ? "没有账号？去注册" : "已有账号？去登录"}
+            </button>
+            {mode === "login" && (
+              <Link
+                to="/forgot-password"
+                className="text-muted-foreground underline-offset-4 hover:underline"
+              >
+                忘记密码？
+              </Link>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -8,6 +8,7 @@ const AuthUserSchema = z.object({
   avatar_url: z.string().nullable().optional(),
   status: z.string(),
   role: z.string(),
+  email_verified: z.boolean().optional(),
   created_at: z.string().optional(),
 });
 
@@ -62,18 +63,32 @@ export async function login(email: string, password: string): Promise<AuthUser> 
   return data.user;
 }
 
+export type RegisterOutcome =
+  | { status: "ok"; user: AuthUser }
+  | { status: "needs_verification"; email: string; user: AuthUser };
+
 export async function register(
   email: string,
   password: string,
   nickname?: string,
-): Promise<AuthUser> {
-  await getEnvelope("/v1/auth/register", z.object({ user: AuthUserSchema }), {
+): Promise<RegisterOutcome> {
+  const reg = await getEnvelope("/v1/auth/register", z.object({ user: AuthUserSchema }), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password, nickname: nickname || undefined }),
   });
-  // 注册成功后自动登录，复用同一套令牌存储
-  return login(email, password);
+  const user = reg.user;
+  // 注册后若邮箱尚未验证，则不自动登录，交由前端引导去邮箱验证
+  if (user.email_verified === false) {
+    return { status: "needs_verification", email, user };
+  }
+  try {
+    const data = await login(email, password);
+    return { status: "ok", user: data };
+  } catch {
+    // 已验证却登录失败（极端情况）：仍以注册用户身份返回，前端可重试
+    return { status: "ok", user };
+  }
 }
 
 export async function fetchMe(): Promise<AuthUser | null> {

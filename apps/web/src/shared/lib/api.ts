@@ -556,3 +556,49 @@ export function postBackgroundChat(args: {
     },
   );
 }
+
+// —— 邮箱验证 / 密码找回（身份基础设施）——
+const AuthUserLoose = z.record(z.unknown());
+
+export function requestVerification(email: string) {
+  return getEnvelope(
+    "/v1/auth/request-verification",
+    z.object({ sent: z.boolean().optional() }),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    },
+  );
+}
+
+export function verifyEmail(token: string) {
+  return getEnvelope(
+    `/v1/auth/verify-email?token=${encodeURIComponent(token)}`,
+    z.object({ user: AuthUserLoose.nullable().optional() }),
+  );
+}
+
+export function requestPasswordReset(email: string) {
+  return getEnvelope(
+    "/v1/auth/request-password-reset",
+    z.object({ sent: z.boolean().optional() }),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    },
+  );
+}
+
+export function resetPassword(token: string, newPassword: string) {
+  return getEnvelope(
+    "/v1/auth/reset-password",
+    z.object({ user: AuthUserLoose.nullable().optional() }),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, new_password: newPassword }),
+    },
+  );
+}
