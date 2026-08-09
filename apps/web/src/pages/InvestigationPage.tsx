@@ -1,8 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
-import { ArrowLeft, Network, Pause, Play, RotateCcw } from "lucide-react";
-import { postAnalyzePipeline } from "@/shared/lib/api";
+import { ArrowLeft, Network, Pause, Play, Radio, RotateCcw } from "lucide-react";
+import {
+  postAnalyzePipeline,
+  subscribePipelineStream,
+  type AgentTrace,
+  type EvidenceItem,
+  type PipelineStreamEvent,
+  type ToolCall,
+  type TraceEvent,
+  type TraceSummary,
+} from "@/shared/lib/api";
 import { useUiStore } from "@/shared/store/ui";
 import {
   Button,
@@ -21,6 +38,41 @@ import { EvidencePanel } from "@/features/investigation/EvidencePanel";
 import { OrchestrationCanvas } from "@/features/investigation/OrchestrationCanvas";
 import * as Tabs from "@radix-ui/react-tabs";
 
+function seedAgents(): AgentTrace[] {
+  const base = (role_key: string, label: string, task: string): AgentTrace => ({
+    role_key,
+    label,
+    status: "queued",
+    mode: "deterministic",
+    ok: true,
+    task,
+    inputs: 0,
+    outputs: 0,
+    evidence: 0,
+    tool_calls: [],
+    notes: [],
+    summary: "",
+  });
+  return [
+    base("scoring", "风险评分内核", "规则匹配 + 五维加权评分 + 图谱/压力计算"),
+    base("classifier", "分类 Agent", "识别行业赛道 + 路由重点核查维度"),
+    base("planner", "规划 Agent", "枚举数据缺口 + 生成本地检索计划（失败感知）"),
+    base("researcher", "研究 Agent", "本地 RAG 检索补充证据（缺则显式披露，绝不编造）"),
+    base("writer", "写作 Agent", "writer-only 叙事合成 + 披露透传（不改分）"),
+  ];
+}
+
+function pushEvent(
+  setter: Dispatch<SetStateAction<TraceEvent[]>>,
+  startRef: MutableRefObject<number>,
+  partial: Omit<TraceEvent, "seq" | "ts_offset_ms">,
+) {
+  setter((prev) => [
+    ...prev,
+    { seq: prev.length, ts_offset_ms: Date.now() - startRef.current, ...partial },
+  ]);
+}
+
 export function InvestigationPage() {
   const navigate = useNavigate();
   const { selectedFixture } = useUiStore();
@@ -28,6 +80,16 @@ export function InvestigationPage() {
   const [playing, setPlaying] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // —— 实时 SSE 模式 ——
+  const [live, setLive] = useState(false);
+  const [liveEvents, setLiveEvents] = useState<TraceEvent[]>([]);
+  const [liveAgents, setLiveAgents] = useState<AgentTrace[]>(() => seedAgents());
+  const [liveToolCalls, setLiveToolCalls] = useState<ToolCall[]>([]);
+  const [liveEvidence, setLiveEvidence] = useState<EvidenceItem[]>([]);
+  const [liveSummary, setLiveSummary] = useState<TraceSummary | null>(null);
+  const [liveDone, setLiveDone] = useState(false);
+  const startRef = useRef<number>(Date.now());
 
   const pipeline = useMutation({
     mutationFn: (id: string) => postAnalyzePipeline(id, "analyze_risk", true),
@@ -37,16 +99,95 @@ export function InvestigationPage() {
     },
   });
 
+  // 非实时模式：一次性取 trace；实时模式跳过（由 EventSource 驱动）
   useEffect(() => {
-    pipeline.mutate(selectedFixture);
-  }, [selectedFixture, pipeline]);
+    if (!live) pipeline.mutate(selectedFixture);
+  }, [selectedFixture, pipeline, live]);
+
+  // 实时模式：订阅 SSE，逐步驱动 Agent 状态与事件时间线
+  useEffect(() => {
+    if (!live || !selectedFixture) return;
+    setLiveEvents([]);
+    setLiveAgents(seedAgents());
+    setLiveToolCalls([]);
+    setLiveEvidence([]);
+    setLiveSummary(null);
+    setLiveDone(false);
+    startRef.current = Date.now();
+    const es = subscribePipelineStream(selectedFixture, "analyze_risk", {
+      onEvent: (ev: PipelineStreamEvent) => {
+        if (ev.type === "task_created") {
+          pushEvent(setLiveEvents, startRef, {
+            agent: "scoring",
+            agent_label: "风险评分内核",
+            type: "task_created",
+            message: "研判任务创建，进入多 Agent 协作流程",
+            level: "info",
+          });
+        } else if (ev.type === "agent_start") {
+          setLiveAgents((prev) =>
+            prev.map((a) => (a.role_key === ev.role ? { ...a, status: "running" } : a)),
+          );
+          pushEvent(setLiveEvents, startRef, {
+            agent: ev.role,
+            agent_label: ev.label,
+            type: "agent_start",
+            message: `${ev.label} 开始执行`,
+            level: "info",
+          });
+        } else if (ev.type === "agent_done") {
+          setLiveAgents((prev) =>
+            prev.map((a) =>
+              a.role_key === ev.role
+                ? { ...a, status: ev.ok ? "completed" : "failed", mode: ev.mode, summary: ev.summary }
+                : a,
+            ),
+          );
+          pushEvent(setLiveEvents, startRef, {
+            agent: ev.role,
+            agent_label: ev.label,
+            type: "agent_done",
+            message: `${ev.label} 完成`,
+            level: "info",
+          });
+        } else if (ev.type === "done") {
+          setLiveAgents(ev.trace.agents as AgentTrace[]);
+          setLiveToolCalls(ev.trace.tool_calls as ToolCall[]);
+          setLiveEvidence(ev.trace.evidence as EvidenceItem[]);
+          setLiveSummary(ev.trace.summary as TraceSummary);
+          setLiveDone(true);
+        }
+      },
+      onEnd: () => setLiveDone(true),
+      onError: () => setLiveDone(true),
+    });
+    return () => es.close();
+  }, [live, selectedFixture]);
 
   const trace = pipeline.data?.trace;
-  const events = trace?.events ?? [];
-  const agents = trace?.agents ?? [];
-  const toolCalls = trace?.tool_calls ?? [];
-  const evidence = trace?.evidence ?? [];
-  const summary = trace?.summary;
+  const view = live
+    ? {
+        events: liveEvents,
+        agents: liveAgents,
+        toolCalls: liveToolCalls,
+        evidence: liveEvidence,
+        summary: liveSummary,
+      }
+    : {
+        events: (trace?.events ?? []) as TraceEvent[],
+        agents: (trace?.agents ?? []) as AgentTrace[],
+        toolCalls: (trace?.tool_calls ?? []) as ToolCall[],
+        evidence: (trace?.evidence ?? []) as EvidenceItem[],
+        summary: trace?.summary as TraceSummary | undefined,
+      };
+  const events = view.events;
+  const agents = view.agents;
+  const toolCalls = view.toolCalls;
+  const evidence = view.evidence;
+  const summary = view.summary;
+
+  // 实时模式自动跟随最新事件；非实时用回放 cursor
+  const effectiveCursor = live ? Math.max(0, events.length - 1) : cursor;
 
   useEffect(() => {
     if (playing && events.length) {
@@ -117,16 +258,24 @@ export function InvestigationPage() {
                 ? "降级"
                 : "确定性"}
           </StatusChip>
+          <Button
+            variant={live ? "default" : "outline"}
+            size="sm"
+            onClick={() => setLive((v) => !v)}
+          >
+            <Radio />
+            {live ? "实时中" : "实时研判"}
+          </Button>
         </div>
       </div>
 
-      {pipeline.isPending ? (
+      {!live && pipeline.isPending ? (
         <section className="grid place-items-center rounded-2xl border border-dashed border-border bg-card/50 py-24 text-center">
           <Network size={28} className="mb-3 animate-pulse text-primary" strokeWidth={1.75} />
           <p className="text-base font-semibold">多 Agent 研判中…</p>
           <p className="mt-1 text-sm text-muted-foreground">加载执行迹</p>
         </section>
-      ) : pipeline.isError ? (
+      ) : !live && pipeline.isError ? (
         <section className="rounded-2xl border border-destructive/30 bg-destructive/5 px-6 py-10 text-center">
           <p className="text-sm text-destructive">
             {pipeline.error instanceof Error ? pipeline.error.message : "研判失败"}
@@ -158,10 +307,7 @@ export function InvestigationPage() {
                   </Tabs.List>
                 </CardHeader>
                 <CardContent className="h-[calc(100%-3rem)] min-h-0 overflow-hidden pr-1">
-                  <Tabs.Content
-                    value="queue"
-                    className="h-full space-y-2 overflow-y-auto pr-1"
-                  >
+                  <Tabs.Content value="queue" className="h-full space-y-2 overflow-y-auto pr-1">
                     {agents.map((a) => (
                       <AgentCard
                         key={a.role_key}
@@ -197,37 +343,59 @@ export function InvestigationPage() {
                     Agent 事件流
                   </span>
                   <StatusChip tone="neutral">
-                    {Math.min(cursor + 1, events.length)}/{events.length}
+                    {Math.min(effectiveCursor + 1, events.length)}/{events.length}
                   </StatusChip>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  {playing ? (
-                    <Button variant="outline" size="sm" onClick={() => setPlaying(false)}>
-                      <Pause />
-                      暂停
+                {live ? (
+                  <StatusChip tone={liveDone ? "ok" : "neutral"}>
+                    <Radio size={12} className={liveDone ? "" : "animate-pulse"} />
+                    {liveDone ? "实时完成" : "实时同步中"}
+                  </StatusChip>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    {playing ? (
+                      <Button variant="outline" size="sm" onClick={() => setPlaying(false)}>
+                        <Pause />
+                        暂停
+                      </Button>
+                    ) : (
+                      <Button variant="outline" size="sm" onClick={startReplay}>
+                        <Play />
+                        回放
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setPlaying(false);
+                        setCursor(0);
+                      }}
+                    >
+                      <RotateCcw />
+                      重置
                     </Button>
-                  ) : (
-                    <Button variant="outline" size="sm" onClick={startReplay}>
-                      <Play />
-                      回放
-                    </Button>
-                  )}
-                  <Button variant="outline" size="sm" onClick={() => { setPlaying(false); setCursor(0); }}>
-                    <RotateCcw />
-                    重置
-                  </Button>
-                </div>
+                  </div>
+                )}
               </div>
               <Card className="shrink-0">
                 <CardContent className="max-h-[46%] overflow-y-auto pt-4">
-                  <EventTimeline
-                    events={events}
-                    cursor={cursor}
-                    onJump={(seq) => {
-                      setPlaying(false);
-                      setCursor(seq);
-                    }}
-                  />
+                  {events.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">
+                      实时研判中…等待事件流
+                    </p>
+                  ) : (
+                    <EventTimeline
+                      events={events}
+                      cursor={effectiveCursor}
+                      onJump={(seq) => {
+                        if (!live) {
+                          setPlaying(false);
+                          setCursor(seq);
+                        }
+                      }}
+                    />
+                  )}
                 </CardContent>
               </Card>
               <Card className="min-h-0 flex-1">

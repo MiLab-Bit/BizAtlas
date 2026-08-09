@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
@@ -268,6 +269,38 @@ def analyze_pipeline(req: AnalyzeRequest) -> Envelope[dict]:
             "mode": settings.bizatlas_mode,
             "pipeline_mode": result.get("pipeline_mode"),
             "degraded": degraded,
+        },
+    )
+
+
+@app.get("/v1/analyze/pipeline/stream")
+def analyze_pipeline_stream(company_id: str, task: str = "analyze_risk"):
+    """多 Agent 管线实时流（SSE）：逐步推送 Agent 状态/事件，结束时附完整 trace。
+
+    前端用 EventSource 订阅（GET，便于经 vite 代理同源）。开发态鉴权关闭，无需令牌。
+    """
+    import json
+
+    from bizatlas.contracts.models import AnalyzeRequest
+    from bizatlas.orchestrator.stream import stream_analysis_pipeline
+
+    req = AnalyzeRequest(company_id=company_id, intent=task)
+
+    def event_gen():
+        try:
+            for ev in stream_analysis_pipeline(req):
+                yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+        except Exception as exc:  # noqa: BLE001
+            yield f"event: error\ndata: {json.dumps({'message': str(exc)}, ensure_ascii=False)}\n\n"
+        yield "event: end\ndata: {}\n\n"
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
         },
     )
 

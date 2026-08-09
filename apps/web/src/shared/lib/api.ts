@@ -271,6 +271,25 @@ export type TraceSummary = z.output<typeof TraceSummarySchema>;
 export type TraceData = z.output<typeof TraceSchema>;
 export type AnalyzePipelineData = z.output<typeof AnalyzePipelineSchema>;
 
+// SSE 实时流事件（/v1/analyze/pipeline/stream 逐行推送，供前端实时渲染）
+export type PipelineStreamEvent =
+  | { type: "task_created"; company_id: string }
+  | { type: "agent_start"; role: string; label: string }
+  | {
+      type: "agent_done";
+      role: string;
+      label: string;
+      ok: boolean;
+      mode: string;
+      summary: string;
+    }
+  | {
+      type: "done";
+      trace: TraceData;
+      pipeline_mode: string | null;
+      pipeline_status: string;
+    };
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 function bearerHeader(): Record<string, string> {
@@ -359,6 +378,38 @@ export function postAnalyzePipeline(
       options: { include_stress: includeStress, include_kg: true },
     }),
   });
+}
+
+export function subscribePipelineStream(
+  companyId: string,
+  intent = "analyze_risk",
+  handlers: {
+    onEvent: (ev: PipelineStreamEvent) => void;
+    onEnd?: () => void;
+    onError?: (err: Event) => void;
+  },
+): EventSource {
+  const params = new URLSearchParams({ company_id: companyId, task: intent });
+  const es = new EventSource(
+    `${API_BASE}/v1/analyze/pipeline/stream?${params.toString()}`,
+  );
+  es.onmessage = (e) => {
+    try {
+      const ev = JSON.parse(e.data) as PipelineStreamEvent;
+      handlers.onEvent(ev);
+    } catch {
+      /* 忽略畸形帧 */
+    }
+  };
+  es.addEventListener("end", () => {
+    handlers.onEnd?.();
+    es.close();
+  });
+  es.onerror = (e) => {
+    handlers.onError?.(e);
+    es.close();
+  };
+  return es;
 }
 
 export async function uploadMetrics(companyId: string, file: File) {
