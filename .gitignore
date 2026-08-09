@@ -32,3 +32,10 @@ htmlcov/
 # Secrets (keep .env.example tracked, ignore real .env)
 .env
 .env.*
+
+# Frontend (Vite/React build artifacts & deps)
+node_modules/
+dist/
+apps/web/dist/
+*.tsbuildinfo
+.vite/

@@ -180,6 +180,97 @@ export type AnalyzeData = z.output<typeof AnalyzeSchema>;
 export type ReportData = z.output<typeof ReportSchema>;
 export type WorkflowData = z.output<typeof WorkflowSchema>;
 
+// —— 多 Agent 执行迹（调查工作台）——
+const AgentTraceSchema = z.object({
+  role_key: z.string(),
+  label: z.string(),
+  status: z.string(),
+  mode: z.string(),
+  ok: z.boolean(),
+  task: z.string(),
+  inputs: z.number(),
+  outputs: z.number(),
+  evidence: z.number(),
+  tool_calls: z.array(z.string()),
+  notes: z.array(z.string()),
+  summary: z.string().optional().default(""),
+});
+
+const ToolCallSchema = z.object({
+  agent: z.string(),
+  agent_label: z.string(),
+  name: z.string(),
+  kind: z.string(),
+  detail: z.string(),
+  result: z.string(),
+  ok: z.boolean(),
+});
+
+const TraceEventSchema = z.object({
+  seq: z.number(),
+  ts_offset_ms: z.number(),
+  agent: z.string(),
+  agent_label: z.string(),
+  type: z.string(),
+  message: z.string(),
+  level: z.string(),
+});
+
+const EvidenceSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  dimension: z.string().optional().default(""),
+  page: z.number().nullable().optional(),
+  tier: z.string().nullable().optional(),
+  value: z.number().nullable().optional(),
+  confidence: z.number().nullable().optional(),
+  source: z.string().optional().default(""),
+  kind: z.string(),
+});
+
+const TraceSummarySchema = z.object({
+  grade: z.string().nullable().optional(),
+  score: z.number().nullable().optional(),
+  completeness: z.number().nullable().optional(),
+  rules_hit: z.number(),
+  data_gaps: z.number(),
+  research_found: z.number(),
+  research_gaps: z.number(),
+  disclosures: z.number(),
+  pipeline_mode: z.string().nullable().optional(),
+  llm_used: z.boolean().optional().default(false),
+  dimensions: z.array(z.record(z.unknown())).optional(),
+  headline: z.string().optional().default(""),
+});
+
+const TraceSchema = z.object({
+  task_id: z.string().nullable().optional(),
+  company: z.record(z.unknown()).optional(),
+  pipeline_status: z.string().optional().default("succeeded"),
+  pipeline_mode: z.string().nullable().optional(),
+  agents: z.array(AgentTraceSchema),
+  tool_calls: z.array(ToolCallSchema),
+  events: z.array(TraceEventSchema),
+  evidence: z.array(EvidenceSchema),
+  summary: TraceSummarySchema,
+});
+
+const AnalyzePipelineSchema = AnalyzeSchema.extend({
+  trace: TraceSchema,
+  pipeline_mode: z.string().nullable().optional(),
+  agents: z.record(z.unknown()).optional(),
+  narrative: z.record(z.unknown()).optional(),
+  disclosures: z.array(z.record(z.unknown())).optional(),
+});
+
+export type AgentTrace = z.output<typeof AgentTraceSchema>;
+export type ToolCall = z.output<typeof ToolCallSchema>;
+export type TraceEvent = z.output<typeof TraceEventSchema>;
+export type EvidenceItem = z.output<typeof EvidenceSchema>;
+export type TraceSummary = z.output<typeof TraceSummarySchema>;
+export type TraceData = z.output<typeof TraceSchema>;
+export type AnalyzePipelineData = z.output<typeof AnalyzePipelineSchema>;
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 async function getEnvelope<S extends z.ZodTypeAny>(
@@ -241,6 +332,24 @@ export function postAnalyze(companyId: string, intent = "analyze_risk", includeS
       intent,
       message: "帮我看风险",
       template_id: intent === "gen_report" ? "risk_onepager" : null,
+      options: { include_stress: includeStress, include_kg: true },
+    }),
+  });
+}
+
+export function postAnalyzePipeline(
+  companyId: string,
+  intent = "analyze_risk",
+  includeStress = true,
+) {
+  return getEnvelope("/v1/analyze/pipeline", AnalyzePipelineSchema, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      company_id: companyId,
+      intent,
+      message: "进入调查",
+      template_id: null,
       options: { include_stress: includeStress, include_kg: true },
     }),
   });

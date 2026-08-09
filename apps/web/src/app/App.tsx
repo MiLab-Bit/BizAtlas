@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { IntakePage } from "../pages/IntakePage";
+import { InvestigationPage } from "../pages/InvestigationPage";
 import { ReportsPage } from "../pages/ReportsPage";
 import { RulesPage } from "../pages/RulesPage";
 import { WorkbenchPage } from "../pages/WorkbenchPage";
@@ -12,6 +13,7 @@ export function App() {
         <Route element={<Shell />}>
           <Route index element={<IntakePage />} />
           <Route path="workbench" element={<WorkbenchPage />} />
+          <Route path="investigation" element={<InvestigationPage />} />
           <Route path="rules" element={<RulesPage />} />
           <Route path="reports" element={<ReportsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

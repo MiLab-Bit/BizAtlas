@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Radar, ScanSearch, Upload } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Network, Radar, ScanSearch, Upload } from "lucide-react";
 import { useState } from "react";
 import { AttributionPanel } from "@/features/risk/AttributionPanel";
 import { ConflictsPanel } from "@/features/risk/ConflictsPanel";
@@ -39,6 +40,7 @@ import {
 
 export function WorkbenchPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { selectedFixture, setSelectedFixture, setAnalyzeContext } = useUiStore();
   const [mode, setMode] = useState<"fixture" | "upload" | "workflow">("fixture");
   const [companyName, setCompanyName] = useState("上传演示企业");
@@ -390,6 +392,15 @@ export function WorkbenchPage() {
                     }
                   >
                     信用报告 Word/PDF
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!targetId}
+                    onClick={() => navigate("/investigation")}
+                  >
+                    <Network />
+                    进入调查
                   </Button>
                 </div>
                 {exportHint ? <p className="text-sm text-muted-foreground">{exportHint}</p> : null}

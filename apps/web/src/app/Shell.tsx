@@ -3,6 +3,7 @@ import {
   Activity,
   FileText,
   LayoutDashboard,
+  Network,
   Scale,
   Search,
   Shield,
@@ -36,6 +37,7 @@ export function Shell() {
             [
               ["/", "背调", Search, true],
               ["/workbench", "工作台", LayoutDashboard, false],
+              ["/investigation", "调查", Network, false],
               ["/rules", "规则中心", Scale, false],
               ["/reports", "报告中心", FileText, false],
             ] as const
