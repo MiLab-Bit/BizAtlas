@@ -2,7 +2,7 @@
 
 > 对齐 PRD `06` · 工程数据层 [`04-data-layer.md`](./04-data-layer.md)  
 > 原则：**上传资料是主源；外部 API 是补全与对标；任何源可降级。**  
-> **占位已建：** [`../content/providers/registry.yaml`](../content/providers/registry.yaml) + `packages/data/providers/*` Stub；默认 snapshot，密钥稍后逐个 `enabled: true`。
+> **数据源已落地：** [`../content/providers/registry.yaml`](../content/providers/registry.yaml) + `packages/bizatlas/data/providers_*.py`（已全量实现，非 Stub）；默认 snapshot，密钥已配置并逐项 `enabled: true`。
 
 ---
 
@@ -70,16 +70,16 @@
 ## 3. Provider 落位（工程）
 
 ```
-packages/data/providers/
-  upload_financial.py      # P0 主源
-  tushare_financial.py     # P0
-  akshare_financial.py     # P0 降级/互补
-  fixture_provider.py      # P0 snapshot
-  industry_static.py       # P0
-  qcc_or_tyc_company.py    # P1 工商司法（统一接口）
-  cninfo_announcement.py   # P1
-  news_sentiment.py        # P2
+packages/bizatlas/data/
+  providers_akshare.py              # P0 上市财务补充（AKShare）
+  providers_tushare.py              # P0 上市财务（Tushare Pro）
+  providers_tianyancha.py           # P1 工商司法主源（天眼查）
+  providers_qichacha.py             # P1 工商司法（企查查，单源策略备用，registry 关闭）
+  providers_cninfo.py               # P1 巨潮公告
+  providers_news_akshare.py         # P2 新闻舆情（AKShare）
+  providers_company_json_import.py  # P1 工商司法 JSON 导入兜底（无商业 Key 时使用）
 ```
+> 注：`upload` / `fixture` 主源与 `industry_static` 行业参数分别由上传解析器与 `bizatlas.industry.benchmarks` 直接承载，不在此目录。
 
 解析优先级（字段级）：
 

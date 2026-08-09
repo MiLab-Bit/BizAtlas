@@ -1,6 +1,6 @@
 # BizAtlas 数据源注册表（占位）
 # 配密钥时：改 enabled / 填 .env 对应变量即可逐个点亮
-# 实现约定：packages/data/providers/<id>.py 读取本表 + 环境变量
+# 实现落位：packages/bizatlas/data/providers_<id>.py（活跃实现，读取本表 + 环境变量）
 
 version: 1
 

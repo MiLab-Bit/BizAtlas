@@ -105,6 +105,8 @@ MVP 实现：
 
 编排时由 `DataPlane.resolve(field)` 按模式选择 L1→L2→L3。
 
+> 真实实现见 `packages/bizatlas/data/providers_*.py`（函数式 `fetch_*` 接口 + `registry.yaml` 驱动，无统一 Protocol 基类）。
+
 ---
 
 ## 6. 安全与合规（工程约束）
