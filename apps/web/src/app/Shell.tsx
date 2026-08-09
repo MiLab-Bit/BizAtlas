@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
@@ -10,6 +10,7 @@ import {
   Search,
   Shield,
   User as UserIcon,
+  Database,
 } from "lucide-react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { fetchHealth } from "@/shared/lib/api";
@@ -21,6 +22,29 @@ export function Shell() {
   const health = useQuery({ queryKey: ["health"], queryFn: fetchHealth, retry: 1 });
   const navigate = useNavigate();
   const [user, setUser] = useState<AuthUser | null>(getStoredUser());
+
+  // 数据源接入状态（来自 /v1/health 的 providers 列表）
+  const [srcOpen, setSrcOpen] = useState(false);
+  const srcRef = useRef<HTMLDivElement>(null);
+  const providers = health.data?.providers ?? [];
+  const enabledProviders = providers.filter((p) => p.enabled);
+  const readyCount = enabledProviders.filter((p) => p.ok).length;
+  const enabledCount = enabledProviders.length;
+  const sourcesTone: "neutral" | "ok" | "bad" = !enabledCount
+    ? "neutral"
+    : enabledProviders.every((p) => p.ok)
+    ? "ok"
+    : "bad";
+
+  // 点击外部关闭数据源下拉
+  useEffect(() => {
+    if (!srcOpen) return;
+    function onDown(e: MouseEvent) {
+      if (srcRef.current && !srcRef.current.contains(e.target as Node)) setSrcOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [srcOpen]);
 
   // 挂载时校验令牌并刷新用户信息（令牌失效则清空本地态）
   useEffect(() => {
@@ -98,6 +122,56 @@ export function Shell() {
           >
             {health.isError ? "API OFF" : health.data?.db_ok ? "DB OK" : "DB …"}
           </StatusChip>
+          {/* 数据源接入状态 */}
+          {providers.length ? (
+            <div ref={srcRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setSrcOpen((o) => !o)}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
+                  sourcesTone === "neutral" && "border-border bg-secondary/70 text-muted-foreground",
+                  sourcesTone === "ok" && "border-[hsl(var(--grade-green)/0.28)] bg-[hsl(var(--grade-green)/0.1)] text-grade-green",
+                  sourcesTone === "bad" && "border-destructive/25 bg-destructive/10 text-destructive",
+                )}
+              >
+                <Database size={12} />
+                数据源 {readyCount}/{enabledCount}
+              </button>
+              {srcOpen && (
+                <div className="absolute right-0 top-full z-40 mt-2 w-72 rounded-lg border border-border bg-card p-2 shadow-lg">
+                  <div className="px-1 pb-1.5 text-[0.7rem] font-medium uppercase tracking-wide text-muted-foreground">
+                    数据源接入状态
+                  </div>
+                  <ul className="flex flex-col gap-0.5">
+                    {providers.map((p) => {
+                      const tone = !p.enabled ? "neutral" : p.ok ? "ok" : "bad";
+                      return (
+                        <li
+                          key={p.id}
+                          className="flex items-center justify-between gap-2 rounded-md px-1 py-1 text-sm hover:bg-accent"
+                          title={p.message || undefined}
+                        >
+                          <span className="truncate text-foreground">{p.name}</span>
+                          <span
+                            className={cn(
+                              "shrink-0 rounded-full border px-1.5 py-0.5 text-[0.65rem] font-medium",
+                              tone === "neutral" && "border-border bg-secondary/70 text-muted-foreground",
+                              tone === "ok" && "border-[hsl(var(--grade-green)/0.28)] bg-[hsl(var(--grade-green)/0.1)] text-grade-green",
+                              tone === "bad" && "border-destructive/25 bg-destructive/10 text-destructive",
+                            )}
+                          >
+                            {!p.enabled ? "未启用" : p.ok ? "就绪" : "异常"}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ) : null}
+
           {user ? (
             <div className="flex items-center gap-1.5">
               <StatusChip tone="ok">
