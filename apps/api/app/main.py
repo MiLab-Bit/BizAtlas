@@ -33,12 +33,17 @@ from bizatlas.auth.rbac import Action, Principal, Role
 from bizatlas.identity import (
     IdentityError,
     authenticate,
+    get_user_by_email,
     get_user_by_public_id,
     list_audit,
     logout,
     refresh,
     register,
+    request_password_reset,
+    reset_password,
     role_scopes,
+    send_verification_email,
+    verify_email,
 )
 from bizatlas.observability import observe
 from bizatlas.observability.metrics import default_metrics
@@ -288,6 +293,19 @@ class LogoutRequest(BaseModel):
     refresh_token: str
 
 
+class RequestVerificationRequest(BaseModel):
+    email: str
+
+
+class PasswordResetRequestRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
 def _client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
@@ -380,6 +398,49 @@ def auth_audit(
 ) -> Envelope[dict]:
     """审计日志（仅 ADMIN）。返回登录/改密/权限变更等事件。"""
     return Envelope(ok=True, data={"events": list_audit(limit=limit)}, meta={"degraded": False})
+
+
+# ===== 邮箱验证 / 密码找回 =====
+@app.post("/v1/auth/request-verification")
+def auth_request_verification(req: RequestVerificationRequest, request: Request) -> Envelope[dict]:
+    """（重新）发送邮箱验证邮件。邮箱不存在或已验证时静默成功（不泄露状态）。"""
+    user = get_user_by_email(req.email)
+    if user and not user.email_verified:
+        try:
+            send_verification_email(user)
+        except IdentityError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    return Envelope(ok=True, data={"sent": True}, meta={"degraded": False})
+
+
+@app.get("/v1/auth/verify-email")
+def auth_verify_email(token: str) -> Envelope[dict]:
+    """邮箱验证回调（前端验证页点击链接触发）。无效/过期/已用 → 400。"""
+    try:
+        user = verify_email(token)
+    except IdentityError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return Envelope(ok=True, data={"user": user.to_public()}, meta={"degraded": False})
+
+
+@app.post("/v1/auth/request-password-reset")
+def auth_request_password_reset(req: PasswordResetRequestRequest, request: Request) -> Envelope[dict]:
+    """发起密码重置（发邮件）。邮箱不存在时静默成功（不泄露账号是否存在）。"""
+    try:
+        request_password_reset(req.email)
+    except IdentityError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return Envelope(ok=True, data={"sent": True}, meta={"degraded": False})
+
+
+@app.post("/v1/auth/reset-password")
+def auth_reset_password(req: ResetPasswordRequest) -> Envelope[dict]:
+    """用重置 token 设置新密码。无效/过期/已用/弱密码 → 400。"""
+    try:
+        user = reset_password(req.token, req.new_password)
+    except IdentityError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return Envelope(ok=True, data={"user": user.to_public()}, meta={"degraded": False})
 
 
 @app.post("/v1/reports")

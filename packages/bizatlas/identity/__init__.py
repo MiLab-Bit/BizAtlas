@@ -17,7 +17,11 @@ from bizatlas.identity.service import (
     logout,
     refresh,
     register,
+    request_password_reset,
+    reset_password,
     role_scopes,
+    send_verification_email,
+    verify_email,
 )
 
 __all__ = [

@@ -57,6 +57,23 @@ class Settings(BaseSettings):
     bizatlas_token_access_ttl: int = 900
     bizatlas_token_refresh_ttl: int = 604800
 
+    # —— 邮箱发信（SMTP）与邮箱验证/密码找回 ——
+    # 复用 FastToken 的 QQ 邮箱授权码发信；smtp_enabled=false 时发信模块返回 None
+    # （端点不发送，仅生成 token，便于离线/测试）。
+    smtp_host: str = ""
+    smtp_port: int = 465
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_use_ssl: bool = True  # 465→SSL；587→STARTTLS（设为 false）
+    smtp_enabled: bool = False
+
+    # 邮箱验证：开启后注册即置 email_verified=0 并发验证邮件，未验证账号登录被拦截。
+    # 默认关闭以保持旧演示/测试无感（注册即视为已验证）。
+    email_verification_enabled: bool = False
+    email_base_url: str = "http://localhost:5173"  # 验证/重置链接的前端 base
+    email_token_ttl: int = 3600  # 验证/重置 token 有效期（秒）
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

@@ -15,8 +15,9 @@ class User:
     avatar_url: Optional[str]
     status: str
     role: str  # RBAC 角色值：viewer/analyst/reviewer/admin
-    created_at: str
-    updated_at: str
+    email_verified: bool = False
+    created_at: str = ""
+    updated_at: str = ""
 
     def to_public(self) -> dict:
         """对外暴露的安全字段（不含密码/内部 id）。"""
@@ -27,6 +28,7 @@ class User:
             "avatar_url": self.avatar_url,
             "status": self.status,
             "role": self.role,
+            "email_verified": self.email_verified,
             "created_at": self.created_at,
         }
 

@@ -21,11 +21,20 @@ from bizatlas.config import get_settings
 from bizatlas.data.db import get_connection
 from bizatlas.identity.models import User
 from bizatlas.identity.passwords import hash_password, verify_password
+from bizatlas.identity.email import (
+    default_sender,
+    build_verification_email,
+    build_password_reset_email,
+    verification_link,
+    reset_link,
+)
 from bizatlas.tools.permissions import ROLE_SCOPES
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 VALID_ROLES = {r.value for r in Role}
 MIN_PASSWORD_LEN = 8
+EMAIL_VERIFY_PURPOSE = "verify_email"
+PASSWORD_RESET_PURPOSE = "password_reset"
 
 
 class IdentityError(Exception):
@@ -45,6 +54,7 @@ def _row_to_user(row) -> User:
         avatar_url=row["avatar_url"],
         status=row["status"],
         role=row["role"],
+        email_verified=bool(row["email_verified"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -78,6 +88,7 @@ def register(
     nickname: Optional[str] = None,
     role: str = "viewer",
     ip: Optional[str] = None,
+    email_sender: object = None,
 ) -> User:
     """注册邮箱账号（默认 viewer 角色）。重复邮箱 → 409。"""
     email = (email or "").strip().lower()
@@ -113,8 +124,17 @@ def register(
         conn.commit()
     finally:
         conn.close()
+    user = get_user_by_public_id(public_id)
+    settings = get_settings()
+    if settings.email_verification_enabled:
+        # 注册即未验证（email_verified 默认 0），发送验证邮件
+        send_verification_email(user, email_sender)
+    else:
+        # 未启用验证：注册即视为已验证（向后兼容旧演示/测试）
+        _set_email_verified(user.id, True)
+        user.email_verified = True
     _audit(uid, "register", f"email={email}", ip)
-    return get_user_by_public_id(public_id)
+    return user
 
 
 def authenticate(
@@ -141,6 +161,9 @@ def authenticate(
         raise IdentityError("invalid credentials")
 
     settings = get_settings()
+    if settings.email_verification_enabled and not user.email_verified:
+        _audit(user.id, "login_blocked", "email not verified", ip)
+        raise IdentityError("email not verified")
     access_token = issue_token(
         user_id=user.public_id,
         role=Role(user.role),
@@ -268,3 +291,131 @@ def role_scopes(role: str) -> list[str]:
     """返回某角色拥有的 Scope（供前端展示权限边界）。"""
     r = Role(role) if role in VALID_ROLES else Role.VIEWER
     return sorted(s.value for s in ROLE_SCOPES.get(r, set()))
+
+
+def _set_email_verified(user_id: str, value: bool) -> None:
+    conn = get_connection()
+    try:
+        conn.execute(
+            "UPDATE users SET email_verified=?, updated_at=? WHERE id=?",
+            (1 if value else 0, _now(), user_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _create_email_token(user_id: str, purpose: str, ttl: int | None = None) -> str:
+    """生成一次性 token（仅存 SHA-256 哈希），返回原始 token（调用方用于发信）。"""
+    raw = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    ttl = ttl or get_settings().email_token_ttl
+    expires_at = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() + ttl))
+    conn = get_connection()
+    try:
+        conn.execute(
+            "INSERT INTO email_verifications (id, user_id, token_hash, purpose, expires_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), user_id, token_hash, purpose, expires_at),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return raw
+
+
+def send_verification_email(user: User, sender: object = None) -> str | None:
+    """为用户发送邮箱验证邮件；返回 token（测试用）。无 sender 时仅生成 token 不发信。"""
+    sender = sender or default_sender()
+    token = _create_email_token(user.id, EMAIL_VERIFY_PURPOSE)
+    if sender:
+        link = verification_link(token, get_settings().email_base_url)
+        subject, html = build_verification_email(link)
+        sender.send(user.email, subject, html)
+    return token
+
+
+def verify_email(token: str) -> User:
+    """用验证 token 标记邮箱已验证。无效/过期/已用 → IdentityError。"""
+    if not token:
+        raise IdentityError("missing token")
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT * FROM email_verifications WHERE token_hash=? AND purpose=?",
+            (token_hash, EMAIL_VERIFY_PURPOSE),
+        ).fetchone()
+        if not row:
+            raise IdentityError("invalid token")
+        if row["consumed_at"]:
+            raise IdentityError("token already used")
+        if time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()) > row["expires_at"]:
+            raise IdentityError("token expired")
+        user_row = conn.execute(
+            "SELECT public_id FROM users WHERE id=?", (row["user_id"],)
+        ).fetchone()
+        conn.execute("UPDATE users SET email_verified=1, updated_at=? WHERE id=?", (_now(), row["user_id"]))
+        conn.execute(
+            "UPDATE user_identities SET verified_at=? WHERE user_id=? AND provider='email'",
+            (_now(), row["user_id"]),
+        )
+        conn.execute("UPDATE email_verifications SET consumed_at=? WHERE id=?", (_now(), row["id"]))
+        conn.commit()
+    finally:
+        conn.close()
+    if not user_row:
+        raise IdentityError("invalid token")
+    return get_user_by_public_id(user_row["public_id"])
+
+
+def request_password_reset(email: str, sender: object = None) -> str | None:
+    """发起密码重置：生成 token 并发邮件。邮箱不存在时返回 None（不泄露账号存在）。"""
+    email = (email or "").strip().lower()
+    user = get_user_by_email(email)
+    if not user:
+        return None
+    sender = sender or default_sender()
+    token = _create_email_token(user.id, PASSWORD_RESET_PURPOSE)
+    if sender:
+        link = reset_link(token, get_settings().email_base_url)
+        subject, html = build_password_reset_email(link)
+        sender.send(user.email, subject, html)
+    return token
+
+
+def reset_password(token: str, new_password: str) -> User:
+    """用重置 token 更新密码。无效/过期/已用/弱密码 → IdentityError。"""
+    if not token:
+        raise IdentityError("missing token")
+    if len(new_password or "") < MIN_PASSWORD_LEN:
+        raise IdentityError(f"password too short (min {MIN_PASSWORD_LEN})")
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT * FROM email_verifications WHERE token_hash=? AND purpose=?",
+            (token_hash, PASSWORD_RESET_PURPOSE),
+        ).fetchone()
+        if not row:
+            raise IdentityError("invalid token")
+        if row["consumed_at"]:
+            raise IdentityError("token already used")
+        if time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()) > row["expires_at"]:
+            raise IdentityError("token expired")
+        user_row = conn.execute(
+            "SELECT public_id FROM users WHERE id=?", (row["user_id"],)
+        ).fetchone()
+        conn.execute(
+            "UPDATE password_credentials SET password_hash=?, password_algo='pbkdf2_sha256', "
+            "iterations=?, changed_at=? WHERE user_id=?",
+            (hash_password(new_password), 200_000, _now(), row["user_id"]),
+        )
+        conn.execute("UPDATE users SET email_verified=1, updated_at=? WHERE id=?", (_now(), row["user_id"]))
+        conn.execute("UPDATE email_verifications SET consumed_at=? WHERE id=?", (_now(), row["id"]))
+        conn.commit()
+    finally:
+        conn.close()
+    if not user_row:
+        raise IdentityError("invalid token")
+    return get_user_by_public_id(user_row["public_id"])
