@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     bizatlas_auth_disabled: bool = True
     bizatlas_auth_secret: str = ""
 
+    # —— 邮箱用户系统（身份基础设施）：令牌时效（秒）——
+    # 访问令牌短时效（默认 15 分钟），刷新令牌长时效（默认 7 天）。
+    bizatlas_token_access_ttl: int = 900
+    bizatlas_token_refresh_ttl: int = 604800
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

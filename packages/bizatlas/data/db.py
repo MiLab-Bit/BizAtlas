@@ -168,4 +168,8 @@ def init_db(db_path: str | None = None) -> Path:
         conn.commit()
     finally:
         conn.close()
+    # 身份基础设施表（邮箱用户系统）：幂等，独立迁移入口。
+    from bizatlas.identity.schema import init_identity_db
+
+    init_identity_db(str(path))
     return path

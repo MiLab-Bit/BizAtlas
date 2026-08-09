@@ -64,3 +64,22 @@ def guard_review():
         return principal
 
     return _dep
+
+
+def resolve_principal(authorization: Optional[str] = Header(default=None)) -> Principal:
+    """严格主体解析（供 /v1/auth/me 使用）：
+
+    - 带 Bearer 令牌：无论 auth_disabled 都校验，无效 → 401（让令牌真实生效）。
+    - 无令牌且 auth_disabled：退回匿名 ADMIN（开发态兼容）。
+    - 无令牌且鉴权开启：401。
+    """
+    settings = get_settings()
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[len("Bearer ") :].strip()
+        try:
+            return verify_token(token, settings.bizatlas_auth_secret)
+        except TokenInvalid as exc:
+            raise HTTPException(status_code=401, detail=str(exc))
+    if settings.bizatlas_auth_disabled:
+        return anonymous_admin()
+    raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")

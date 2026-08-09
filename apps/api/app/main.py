@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Response, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
@@ -30,12 +30,22 @@ from bizatlas.workflow.due_diligence import (
 )
 
 from bizatlas.auth.rbac import Action, Principal, Role
+from bizatlas.identity import (
+    IdentityError,
+    authenticate,
+    get_user_by_public_id,
+    list_audit,
+    logout,
+    refresh,
+    register,
+    role_scopes,
+)
 from bizatlas.observability import observe
 from bizatlas.observability.metrics import default_metrics
 from bizatlas.service.health import liveness, readiness
 from bizatlas.tools.builtins import register_default_tools
 from bizatlas.tools.permissions import matrix_summary
-from apps.api.auth_deps import get_principal, guard, guard_review
+from apps.api.auth_deps import get_principal, guard, guard_review, resolve_principal
 from apps.api.observability_middleware import ObservabilityMiddleware
 
 settings = get_settings()
@@ -255,6 +265,121 @@ def analyze_pipeline(req: AnalyzeRequest) -> Envelope[dict]:
             "degraded": degraded,
         },
     )
+
+
+# ===== 邮箱用户系统（身份基础设施） =====
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    nickname: str | None = None
+    role: str = "viewer"  # viewer/analyst/reviewer/admin
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str
+
+
+def _client_ip(request: Request) -> str | None:
+    return request.client.host if request.client else None
+
+
+@app.post("/v1/auth/register")
+def auth_register(req: RegisterRequest, request: Request) -> Envelope[dict]:
+    """邮箱注册（默认 viewer）。重复邮箱 → 409。"""
+    try:
+        user = register(
+            req.email,
+            req.password,
+            nickname=req.nickname,
+            role=req.role,
+            ip=_client_ip(request),
+        )
+    except IdentityError as exc:
+        raise HTTPException(status_code=409 if "already registered" in str(exc) else 400, detail=str(exc))
+    return Envelope(ok=True, data={"user": user.to_public()}, meta={"degraded": False})
+
+
+@app.post("/v1/auth/login")
+def auth_login(req: LoginRequest, request: Request) -> Envelope[dict]:
+    """邮箱+密码登录 → 访问/刷新令牌。失败 → 401。"""
+    try:
+        out = authenticate(req.email, req.password, ip=_client_ip(request))
+    except IdentityError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+    return Envelope(ok=True, data=out, meta={"degraded": False})
+
+
+@app.post("/v1/auth/refresh")
+def auth_refresh(req: RefreshRequest) -> Envelope[dict]:
+    """刷新令牌换访问令牌。失败 → 401。"""
+    try:
+        out = refresh(req.refresh_token)
+    except IdentityError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+    return Envelope(ok=True, data=out, meta={"degraded": False})
+
+
+@app.post("/v1/auth/logout")
+def auth_logout(req: LogoutRequest) -> Envelope[dict]:
+    """撤销刷新令牌会话。"""
+    logout(req.refresh_token)
+    return Envelope(ok=True, data={"revoked": True}, meta={"degraded": False})
+
+
+@app.get("/v1/auth/me")
+def auth_me(principal: Principal = Depends(resolve_principal)) -> Envelope[dict]:
+    """当前登录用户（令牌真实生效；开发态无令牌退回匿名 ADMIN）。"""
+    if principal.user_id in ("anonymous",):
+        return Envelope(
+            ok=True,
+            data={
+                "user": None,
+                "anonymous": True,
+                "role": principal.role.value,
+                "scopes": sorted(s.value for s in principal.scopes),
+            },
+            meta={"degraded": False},
+        )
+    u = get_user_by_public_id(principal.user_id)
+    if not u:
+        return Envelope(
+            ok=True,
+            data={"user": None, "role": principal.role.value, "scopes": sorted(s.value for s in principal.scopes)},
+            meta={"degraded": False},
+        )
+    return Envelope(
+        ok=True,
+        data={"user": u.to_public(), "role": principal.role.value, "scopes": sorted(s.value for s in principal.scopes)},
+        meta={"degraded": False},
+    )
+
+
+@app.get("/v1/auth/rbac")
+def auth_rbac_matrix() -> Envelope[dict]:
+    """公开 RBAC 矩阵（角色→权限），供前端登录/权限说明。"""
+    return Envelope(
+        ok=True,
+        data={"roles": sorted(role_scopes(r) for r in ["viewer", "analyst", "reviewer", "admin"]), "matrix": matrix_summary()},
+        meta={"degraded": False},
+    )
+
+
+@app.get("/v1/auth/audit")
+def auth_audit(
+    principal: Principal = Depends(guard(Action.ADMIN)),
+    limit: int = 50,
+) -> Envelope[dict]:
+    """审计日志（仅 ADMIN）。返回登录/改密/权限变更等事件。"""
+    return Envelope(ok=True, data={"events": list_audit(limit=limit)}, meta={"degraded": False})
 
 
 @app.post("/v1/reports")
