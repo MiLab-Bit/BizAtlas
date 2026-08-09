@@ -94,7 +94,7 @@ providers:
     env: []
     serves: [announcements]
     status: ready
-    notes: 已实现（免费）；实测本环境端点 404，需实网冒烟校准端点/反爬
+    notes: 已实现（免费）；端点 /new/hisAnnouncement/query + 沪深京 szse_stock.json 取 orgId，实测沪/深/创业板均可用
 
   # ---------- P2：舆情 ----------
   - id: news_akshare
