@@ -273,12 +273,18 @@ export type AnalyzePipelineData = z.output<typeof AnalyzePipelineSchema>;
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
-async function getEnvelope<S extends z.ZodTypeAny>(
+function bearerHeader(): Record<string, string> {
+  const t = typeof localStorage !== "undefined" ? localStorage.getItem("bizatlas_access_token") : null;
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+export async function getEnvelope<S extends z.ZodTypeAny>(
   path: string,
   schema: S,
   init?: RequestInit,
 ): Promise<z.output<S>> {
-  const res = await fetch(`${API_BASE}${path}`, init);
+  const headers = { ...bearerHeader(), ...(init?.headers ?? {}) };
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   if (!res.ok) {
     let detail: unknown =
       res.status === 404

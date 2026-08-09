@@ -1,20 +1,43 @@
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   FileText,
   LayoutDashboard,
+  LogOut,
   Network,
   Scale,
   Search,
   Shield,
+  User as UserIcon,
 } from "lucide-react";
-import { NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { fetchHealth } from "@/shared/lib/api";
+import { fetchMe, getStoredUser, logout, type AuthUser } from "@/shared/lib/auth";
 import { cn } from "@/shared/lib/cn";
 import { StatusChip } from "@/shared/ui";
 
 export function Shell() {
   const health = useQuery({ queryKey: ["health"], queryFn: fetchHealth, retry: 1 });
+  const navigate = useNavigate();
+  const [user, setUser] = useState<AuthUser | null>(getStoredUser());
+
+  // 挂载时校验令牌并刷新用户信息（令牌失效则清空本地态）
+  useEffect(() => {
+    let active = true;
+    fetchMe().then((u) => {
+      if (active) setUser(u);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  function handleLogout() {
+    logout();
+    setUser(null);
+    navigate("/login");
+  }
 
   return (
     <div className="flex min-h-full flex-col">
@@ -75,6 +98,32 @@ export function Shell() {
           >
             {health.isError ? "API OFF" : health.data?.db_ok ? "DB OK" : "DB …"}
           </StatusChip>
+          {user ? (
+            <div className="flex items-center gap-1.5">
+              <StatusChip tone="ok">
+                <UserIcon size={12} />
+                {user.nickname || user.email}
+                <span className="opacity-60">·{user.role}</span>
+              </StatusChip>
+              <button
+                type="button"
+                onClick={handleLogout}
+                title="退出登录"
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              >
+                <LogOut size={13} />
+                退出
+              </button>
+            </div>
+          ) : (
+            <Link
+              to="/login"
+              className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <UserIcon size={15} />
+              登录
+            </Link>
+          )}
         </div>
       </header>
       <Outlet />
