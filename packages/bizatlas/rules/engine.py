@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import hashlib
 import yaml
 
 from bizatlas.config import get_settings
@@ -65,6 +66,28 @@ def _eval_event(cond: dict[str, Any], events: dict[str, Any]) -> tuple[bool, str
     return hit, f"事件 {flag}={'是' if hit else '否'}"
 
 
+def _canary_pass(rule: dict[str, Any], canary_key: str | None) -> bool:
+    """灰度门控：规则可设 canary（0..1）按比例对实体确定性分流。
+
+    - 无 canary 字段或 canary>=1：全量生效。
+    - canary<1：按 sha256(canary_key + rule_id) 落在 [0,canary) 的实体才命中。
+    - canary_key 为空（未提供实体标识）时退化为全量，避免误伤。
+    """
+    canary = rule.get("canary")
+    if canary is None:
+        return True
+    try:
+        c = float(canary)
+    except (TypeError, ValueError):
+        return True
+    if c >= 1.0:
+        return True
+    if not canary_key:
+        return True
+    digest = hashlib.sha256(f"{canary_key}:{rule.get('id')}".encode("utf-8")).hexdigest()
+    return (int(digest[:8], 16) / 0xFFFFFFFF) < c
+
+
 class RuleEngine:
     def __init__(self, rules: list[dict[str, Any]] | None = None) -> None:
         if rules is not None:
@@ -81,6 +104,7 @@ class RuleEngine:
         self,
         metrics: list[MetricValue] | dict[str, MetricValue],
         events: dict[str, Any] | None = None,
+        canary_key: str | None = None,
     ) -> list[RuleHit]:
         events = events or {}
         if isinstance(metrics, list):
@@ -92,6 +116,8 @@ class RuleEngine:
         for rule in self.rules:
             status = str(rule.get("status", "active"))
             if status == "disabled":
+                continue
+            if not _canary_pass(rule, canary_key):
                 continue
             cond = rule.get("condition") or {}
             ctype = str(cond.get("type", "threshold"))

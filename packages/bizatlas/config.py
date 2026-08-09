@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     bizatlas_mode: str = "snapshot"
     bizatlas_db_path: str = str(ROOT / "data" / "bizatlas.sqlite")
+    bizatlas_db_dsn: str = ""  # 留空用本地 SQLite；部署时填 postgresql://... 启用 PG 后端（需单独迁移脚本）
     bizatlas_upload_dir: str = str(ROOT / "uploads")
     bizatlas_export_dir: str = str(ROOT / "exports")
     bizatlas_providers_registry: str = str(ROOT / "content" / "providers" / "registry.yaml")

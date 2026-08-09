@@ -144,8 +144,25 @@ CREATE TABLE IF NOT EXISTS evidence (
 """
 
 
+def resolve_db_backend(dsn: str | None = None) -> str:
+    """返回当前数据库后端：'sqlite'（默认）或 'postgres'（DSN 以 postgresql:// 开头）。
+
+    连接层抽象入口：部署到托管 PG 时填 bizatlas_db_dsn，但 SQLite→PG 的 DDL /
+    数据迁移需在部署环境执行（两者语法不兼容），本函数仅做后端识别与分流。
+    """
+    dsn = dsn or get_settings().bizatlas_db_dsn
+    if dsn and (dsn.startswith("postgresql://") or dsn.startswith("postgres://")):
+        return "postgres"
+    return "sqlite"
+
+
 def get_connection(db_path: str | None = None) -> sqlite3.Connection:
     settings = get_settings()
+    if resolve_db_backend() == "postgres":
+        # PG 后端：需在部署环境安装 psycopg 并执行 SQLite→PG 迁移（DDL 不兼容）。
+        raise NotImplementedError(
+            "PostgreSQL 后端尚未启用：请在部署环境安装 psycopg 并提供迁移脚本"
+        )
     path = Path(db_path or settings.bizatlas_db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))

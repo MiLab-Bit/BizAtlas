@@ -69,7 +69,7 @@ def run_analyze(req: AnalyzeRequest) -> dict[str, Any]:
     conflicts = detect_conflicts(observations)
 
     engine = RuleEngine()
-    hits = engine.match(metrics, events=events)
+    hits = engine.match(metrics, events=events, canary_key=company_id)
     risk: RiskResult = score_risk(
         company_id,
         metrics,

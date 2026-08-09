@@ -804,6 +804,21 @@ def rules() -> Envelope[list[dict]]:
     return Envelope(ok=True, data=summary, meta={"count": len(summary)})
 
 
+@app.post("/v1/rules/reload")
+def rules_reload(principal: Principal = Depends(guard(Action.MANAGE_RULES))) -> Envelope[dict]:
+    """规则热更新：显式重新加载全部规则并即时生效（开发态鉴权关闭时无需令牌）。
+
+    规则加载层当前无缓存（每次读取文件+DB 最新态），此端点提供显式触发与计数，
+    便于运维在修改规则文件/DB 后确认生效，亦为将来引入缓存时的统一失效入口。
+    """
+    loaded = load_all_rules()
+    return Envelope(
+        ok=True,
+        data={"reloaded": len(loaded), "mode": settings.bizatlas_mode},
+        meta={"degraded": False},
+    )
+
+
 # Optional quick create+upload helper for demos
 @app.post("/v1/quick/upload-analyze")
 async def quick_upload_analyze(
