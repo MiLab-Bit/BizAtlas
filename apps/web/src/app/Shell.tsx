@@ -12,7 +12,6 @@ import {
   User as UserIcon,
   Database,
   Bot,
-  ChevronDown,
 } from "lucide-react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { fetchHealth } from "@/shared/lib/api";
@@ -27,9 +26,6 @@ export function Shell() {
 
   // 数据源接入状态（来自 /v1/health 的 providers 列表）
   const [srcOpen, setSrcOpen] = useState(false);
-  // 更多菜单（调查 / 工程能力）
-  const [moreOpen, setMoreOpen] = useState(false);
-  const moreRef = useRef<HTMLDivElement>(null);
   const srcRef = useRef<HTMLDivElement>(null);
   const providers = health.data?.providers ?? [];
   const enabledProviders = providers.filter((p) => p.enabled);
@@ -41,16 +37,15 @@ export function Shell() {
     ? "ok"
     : "bad";
 
-  // 点击外部关闭数据源下拉 / 更多菜单
+  // 点击外部关闭数据源下拉
   useEffect(() => {
-    if (!srcOpen && !moreOpen) return;
+    if (!srcOpen) return;
     function onDown(e: MouseEvent) {
       if (srcRef.current && !srcRef.current.contains(e.target as Node)) setSrcOpen(false);
-      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
     }
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
-  }, [srcOpen, moreOpen]);
+  }, [srcOpen]);
 
   // 挂载时校验令牌并刷新用户信息（令牌失效则清空本地态）
   useEffect(() => {
@@ -92,6 +87,8 @@ export function Shell() {
               ["/workbench", "风险分析", LayoutDashboard, "上传资料，深度研判与报告", false],
               ["/reports", "报告记录", FileText, "历史分析沉淀与导出", false],
               ["/rules", "规则中心", Scale, "自定义风险规则", false],
+              ["/investigation", "Agent调查", Network, "多 Agent 协作过程回放", false],
+              ["/engineering", "工程能力", Bot, "Agent 编排与技术架构说明", false],
             ] as const
           ).map(([to, label, Icon, hint, end]) => (
             <NavLink
@@ -110,42 +107,6 @@ export function Shell() {
               <span className="hidden sm:inline">{label}</span>
             </NavLink>
           ))}
-          {/* 更多：调查 / 工程能力 */}
-          <div ref={moreRef} className="relative">
-            <button
-              type="button"
-              onClick={() => setMoreOpen((o) => !o)}
-              title="更多功能"
-              className={cn(
-                "inline-flex items-center gap-1 rounded-md px-2 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
-                moreOpen && "bg-accent text-accent-foreground",
-              )}
-            >
-              <ChevronDown size={15} className={cn("transition-transform", moreOpen && "rotate-180")} />
-              <span className="hidden sm:inline">更多</span>
-            </button>
-            {moreOpen && (
-              <div className="absolute right-0 top-full z-40 mt-1 w-56 rounded-lg border border-border bg-card p-1.5 shadow-lg">
-                {([
-                  ["/investigation", "Agent 调查", Network, "多 Agent 协作过程回放"],
-                  ["/engineering", "工程能力", Bot, "Agent 编排与技术架构说明"],
-                ] as const).map(([to, label, Icon, desc]) => (
-                  <NavLink
-                    key={to}
-                    to={to}
-                    onClick={() => setMoreOpen(false)}
-                    className="flex items-start gap-2.5 rounded-md px-3 py-2.5 text-sm transition-colors hover:bg-muted"
-                  >
-                    <Icon size={16} className="mt-0.5 shrink-0 text-muted-foreground" />
-                    <div>
-                      <div className="font-medium text-foreground">{label}</div>
-                      <div className="text-[11px] leading-snug text-muted-foreground">{desc}</div>
-                    </div>
-                  </NavLink>
-                ))}
-              </div>
-            )}
-          </div>
         </nav>
 
         <div className="flex flex-wrap items-center justify-end gap-1.5">

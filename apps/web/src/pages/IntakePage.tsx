@@ -1,5 +1,6 @@
+// deploy-build-mark-20260809-fix-white-screen
 import { useMutation } from "@tanstack/react-query";
-import { ArrowRight, Building2, Send, Sparkles, FileText, BarChart3, MessageSquareText, Upload } from "lucide-react";
+import { ArrowRight, Building2, Send, Sparkles, FileText, BarChart3, MessageSquareText, Upload, Scale } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { postBackgroundChat, startBackgroundCheck } from "@/shared/lib/api";
@@ -176,7 +177,7 @@ export function IntakePage() {
 
           {!session ? (
             <>
-              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">输入企业名，对话式背调</h1>
+              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">输入企业名 · 对话式背调</h1>
               <p className="max-w-xl text-base text-muted-foreground">
                 写下目标企业名（全称或简称均可），用自然语言追问风险与信用要点。工商司法数据来自天眼查，分析由 LLM 整理。
               </p>

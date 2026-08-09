@@ -7,6 +7,7 @@ import { VerifyEmailPage } from "../pages/VerifyEmailPage";
 import { ReportsPage } from "../pages/ReportsPage";
 import { RulesPage } from "../pages/RulesPage";
 import { WorkbenchPage } from "../pages/WorkbenchPage";
+import { EngineeringPage } from "../pages/EngineeringPage";
 import { Shell } from "./Shell";
 
 export function App() {
@@ -19,6 +20,7 @@ export function App() {
           <Route path="investigation" element={<InvestigationPage />} />
           <Route path="rules" element={<RulesPage />} />
           <Route path="reports" element={<ReportsPage />} />
+          <Route path="engineering" element={<EngineeringPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
         <Route path="/login" element={<LoginPage />} />
