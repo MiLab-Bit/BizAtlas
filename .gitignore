@@ -37,5 +37,7 @@ htmlcov/
 node_modules/
 dist/
 apps/web/dist/
+apps/web/dist*/
+apps/web/*.tar.gz
 *.tsbuildinfo
 .vite/
