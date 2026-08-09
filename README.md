@@ -158,4 +158,33 @@ npm run dev
 
 ---
 
+## 部署
+
+BizAtlas 提供两种部署方式，产物均位于 [`deploy/`](deploy/)：
+
+### 方式 A：容器化（推荐标准化环境）
+见 [`deploy/README.md`](deploy/README.md) —— 基于 `deploy/Dockerfile`（`python:3.12-slim`）与 `deploy/docker-compose.yml`（`restart: unless-stopped` + 健康检查 + 数据卷）。
+
+```bash
+docker build -f deploy/Dockerfile -t bizatlas:0.3.0 .
+docker run --rm -p 8000:8000 bizatlas:0.3.0
+# 或 cd deploy && docker compose up --build
+```
+
+### 方式 B：生产服务器独立部署（systemd + nginx，无 Docker）
+适用于裸机（如阿里云 ECS）。产物：
+- [`deploy/bizatlas.service`](deploy/bizatlas.service) —— systemd 单元，`WorkingDirectory /opt/bizatlas`，`ExecStart` 跑 `python -m apps.api.launcher`，监听 `127.0.0.1:8000`。
+- [`deploy/bizatlas_nginx.conf`](deploy/bizatlas_nginx.conf) —— nginx 站点，`listen 8080`，serve 前端 `dist` 并反代 `/v1` → `127.0.0.1:8000`（**SSE 已关 buffering**）。
+
+典型落地（当前生产实例）：
+- 服务器 `47.103.102.36`，部署目录 `/opt/bizatlas`，访问 `http://47.103.102.36:8080/`。
+- Python ≥3.11（系统自带往往 <3.11，需另装 3.11 建 venv）；依赖 `pip install -r requirements.txt && pip install -e .`（editable 必装）。
+- 默认 SQLite（`BIZATLAS_DB_PATH=./data/bizatlas.sqlite`），`BIZATLAS_AUTH_DISABLED=true`。
+- 与 FastToken 等其他服务互不干扰（独立目录/端口）。
+- ⚠️ 公网访问 8080 需在**阿里云安全组放行 8080 入站**。
+
+> **命名说明**：本仓库 GitHub 名为 `MiLab-Bit/GOPA`（历史名保留），产品 / 工程代号与 Python 包名均为 **BizAtlas / `bizatlas`**。请勿混用。
+
+---
+
 *工程代号 BizAtlas · 产品名 商舆 · 文档对齐 PRD v1.0 · 2026-08-06*

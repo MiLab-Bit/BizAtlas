@@ -69,3 +69,56 @@ Authorization: Bearer <token>
 - `ingest.vision_parse`（视觉解析，沙箱隔离 + 熔断）
 
 外部后端连续失败会自动熔断（快速失败防雪崩）；单次挂起由沙箱超时强制终止。
+
+---
+
+## 6. 生产服务器独立部署（systemd + nginx，无 Docker）
+
+适用于阿里云 ECS 等裸机。配套产物：`bizatlas.service`、`bizatlas_nginx.conf`。当前生产实例：服务器 `47.103.102.36`，目录 `/opt/bizatlas`，访问 `http://47.103.102.36:8080/`。
+
+### 6.1 前置：Python ≥3.11
+系统自带 Python 通常 <3.11（如 Alibaba Cloud Linux 3 自带 3.6.8），需另装 3.11 并建 venv：
+
+```bash
+python3.11 -m venv /opt/bizatlas/venv
+/opt/bizatlas/venv/bin/python -m pip install -r requirements.txt
+/opt/bizatlas/venv/bin/python -m pip install -e .   # editable 必装，否则 No module named 'bizatlas'
+```
+
+> editable 安装必做；venv 移动目录后 bin 脚本 shebang 会失效，pip 一律改用 `python -m pip`。
+
+### 6.2 传输代码 + 放置单元 / 站点
+```bash
+# 传代码（排除 node_modules/.git/__pycache__）
+tar czf - --exclude=node_modules --exclude=.git --exclude='*.pyc' --exclude=__pycache__ . \
+  | ssh root@host 'tar xzf - -C /opt/bizatlas'
+
+# ⚠️ 不要用 --exclude='data'：会误伤源码 packages/bizatlas/data，改用 find 精确补回
+find packages apps -type d -name data | tar --null -czf - -T - \
+  | ssh root@host 'tar xzf - -C /opt/bizatlas'
+
+# 前端需先构建
+cd apps/web && npm install && npm run build    # 产物 apps/web/dist
+
+# 放置 systemd 单元与 nginx 站点
+cp deploy/bizatlas.service /etc/systemd/system/bizatlas.service
+cp deploy/bizatlas_nginx.conf /etc/nginx/conf.d/bizatlas.conf
+systemctl daemon-reload && systemctl enable --now bizatlas
+nginx -t && systemctl reload nginx
+```
+
+### 6.3 验证
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/            # 前端 200
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/v1/health  # 200
+curl -N "http://127.0.0.1:8080/v1/analyze/pipeline/stream?company_id=risky&task=analyze_risk"  # SSE 流
+systemctl is-active bizatlas
+```
+- 健康检查端点为 `/v1/health`（**非** `/live`、`/ready`）。
+- 端口冲突：`nginx -t` 报 `conflicting server name "_" on ...:8080` → 8080 上有别的 `server_name "_"` 块，删残留 conf 即可。
+
+### 6.4 网络
+服务器若无 firewalld，公网访问 8080 需在**云安全组放行 8080 入站**（FastToken 的 80/443 不受影响）。
+
+### 6.5 重命名 / 迁移目录
+若从旧目录（如 `/opt/gopa`）迁移：移动后务必在**新路径**重跑 `python -m pip install -e .` 重注册 editable，否则 import 失败。
