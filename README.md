@@ -82,5 +82,3 @@ BizAtlas/
 ├─ doc/                 # 产品设计、架构、数据层、API 契约等文档
 └─ tests/               # pytest（154 passed）
 ```
-
-部署与本地运行细节见 [`deploy/README.md`](deploy/README.md)。
