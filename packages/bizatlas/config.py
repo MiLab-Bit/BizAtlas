@@ -25,7 +25,8 @@ class Settings(BaseSettings):
 
     tushare_token: str = ""
     tianyancha_token: str = ""
-    qichacha_token: str = ""
+    qichacha_token: str = ""  # 企查查开放平台 appkey
+    qichacha_secret: str = ""  # 企查查开放平台 appsecret（签名用，与 appkey 成对）
     company_json_dir: str = str(ROOT / "content" / "fixtures" / "company_json")
 
     llm_provider: str = "openai_compatible"

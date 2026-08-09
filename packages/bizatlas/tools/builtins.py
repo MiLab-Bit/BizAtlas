@@ -34,6 +34,10 @@ def _provider_fetch(
         from bizatlas.data.providers_akshare import fetch_stock_basic_metrics
 
         return fetch_stock_basic_metrics(symbol)
+    if provider == "tushare":
+        from bizatlas.data.providers_tushare import fetch_stock_basic_metrics
+
+        return fetch_stock_basic_metrics(symbol)
     raise ValueError(f"unsupported provider: {provider}")
 
 

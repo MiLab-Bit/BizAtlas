@@ -37,22 +37,22 @@ providers:
   - id: akshare
     name: AKShare 财务
     tier: L1
-    enabled: false         # ← pip install akshare 后改为 true，并调 /v1/providers/akshare/fetch
+    enabled: true
     needs_key: false
     env: []
     serves: [financial, industry]
     status: ready
-    notes: 实现已就绪；默认关闭，按需启用
+    notes: 已实现并安装（akshare 1.18）；实测通过
 
   - id: tushare
     name: Tushare Pro 财务
     tier: L1
-    enabled: false
+    enabled: true
     needs_key: true
     env: [TUSHARE_TOKEN]
     serves: [financial]
-    status: stub
-    notes: 有积分时优先于 akshare
+    status: ready
+    notes: 已实现（fina_indicator 需 500 积分；免费 token 自动降级 daily 行情）
 
   # ---------- P1：工商司法（二选一主用）----------
   - id: tianyancha
@@ -70,9 +70,10 @@ providers:
     tier: L1
     enabled: false
     needs_key: true
-    env: [QICHACHA_TOKEN]
+    env: [QICHACHA_TOKEN, QICHACHA_SECRET]
     serves: [company_basic, judicial, related]
-    status: stub
+    status: ready
+    notes: 已实现（需 appkey+appsecret 签名）；registry 关闭，单源策略主用天眼查
 
   - id: company_json_import
     name: 工商司法 JSON 导入
@@ -81,28 +82,30 @@ providers:
     needs_key: false
     env: []
     serves: [company_basic, judicial, related]
-    status: stub
-    notes: 无商业 Key 时用导出包；路径见 COMPANY_JSON_DIR
+    status: ready
+    notes: 已实现（读 COMPANY_JSON_DIR 下 <key>.json，灵活字段映射）；无商业 Key 时兜底
 
   # ---------- P1：公告 ----------
   - id: cninfo
     name: 巨潮公告
     tier: L1
-    enabled: false
+    enabled: true
     needs_key: false
     env: []
     serves: [announcements]
-    status: stub
+    status: ready
+    notes: 已实现（免费）；实测本环境端点 404，需实网冒烟校准端点/反爬
 
   # ---------- P2：舆情 ----------
   - id: news_akshare
     name: 新闻舆情（AKShare 通道）
     tier: L1
-    enabled: false
+    enabled: true
     needs_key: false
     env: []
     serves: [sentiment]
-    status: stub
+    status: ready
+    notes: 已实现（ak.stock_news_em）；实测通过
 
 # 字段解析优先级（高 → 低）；未启用的自动跳过
 resolve_order:
