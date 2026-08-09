@@ -52,6 +52,8 @@ def _chat_via_curl(
                 "-X",
                 "POST",
                 url,
+                "--noproxy",
+                "*",  # 同上：绕过本机代理，直连网关
                 "-H",
                 f"Authorization: Bearer {key}",
                 "-H",
@@ -99,7 +101,9 @@ def chat_completion(
         "max_tokens": max_tokens,
     }
     try:
-        with httpx.Client(timeout=timeout) as client:
+        # trust_env=False：绕过本机 Clash 等代理（HTTPS_PROXY/HTTP_PROXY），
+        # 直连用户自建网关 www.abc-ai.cn（直连 0.2s，走代理会超时）。
+        with httpx.Client(timeout=timeout, trust_env=False) as client:
             resp = client.post(
                 url,
                 headers={
