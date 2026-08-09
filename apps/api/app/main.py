@@ -18,6 +18,8 @@ from bizatlas.orchestrator.analyze import (
     generate_onepager_report,
     run_analyze,
 )
+from bizatlas.agents.pipeline import run_analysis_pipeline
+from bizatlas.orchestrator.trace import build_trace
 from bizatlas.rules.nl_compiler import compile_rule_from_nl
 from bizatlas.rules.store import activate_rule, load_all_rules, save_pilot_rule
 from bizatlas.workflow.due_diligence import (
@@ -224,6 +226,32 @@ def analyze(req: AnalyzeRequest) -> Envelope[dict]:
         meta={
             "request_id": result.get("task_id"),
             "mode": settings.bizatlas_mode,
+            "degraded": degraded,
+        },
+    )
+
+
+@app.post("/v1/analyze/pipeline")
+@observe("api.analyze_pipeline")
+def analyze_pipeline(req: AnalyzeRequest) -> Envelope[dict]:
+    """多 Agent 管线研判：确定性内核 + 分类/规划/研究/写作 Agent。
+
+    返回管线完整产出，并附带可视化执行迹 trace（Agent 卡 / 工具调用 /
+    事件时间线 / 证据面板），供前端「调查工作台」回放渲染。
+    """
+    try:
+        result = run_analysis_pipeline(req)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    trace = build_trace(result)
+    degraded = result.get("metrics_count", 0) == 0
+    return Envelope(
+        ok=True,
+        data={**result, "trace": trace},
+        meta={
+            "request_id": result.get("task_id"),
+            "mode": settings.bizatlas_mode,
+            "pipeline_mode": result.get("pipeline_mode"),
             "degraded": degraded,
         },
     )
