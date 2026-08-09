@@ -18,6 +18,8 @@ import { AgentCard } from "@/features/investigation/AgentCard";
 import { ToolCallCard } from "@/features/investigation/ToolCallCard";
 import { EventTimeline } from "@/features/investigation/EventTimeline";
 import { EvidencePanel } from "@/features/investigation/EvidencePanel";
+import { OrchestrationCanvas } from "@/features/investigation/OrchestrationCanvas";
+import * as Tabs from "@radix-ui/react-tabs";
 
 export function InvestigationPage() {
   const navigate = useNavigate();
@@ -135,24 +137,51 @@ export function InvestigationPage() {
           direction="horizontal"
           className="h-[calc(100vh-14rem)] rounded-2xl border border-border bg-card/30 p-2"
         >
-          {/* 左：Agent 队列 */}
+          {/* 左：Agent 队列 / 编排画布 */}
           <Panel defaultSize={24} minSize={18} className="pr-2">
             <Card className="h-full">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Agent 队列</CardTitle>
-              </CardHeader>
-              <CardContent className="h-[calc(100%-3rem)] space-y-2 overflow-y-auto pr-1">
-                {agents.map((a) => (
-                  <AgentCard
-                    key={a.role_key}
-                    agent={a}
-                    active={selectedAgent === a.role_key}
-                    onClick={() =>
-                      setSelectedAgent((s) => (s === a.role_key ? null : a.role_key))
-                    }
-                  />
-                ))}
-              </CardContent>
+              <Tabs.Root defaultValue="queue" className="flex h-full flex-col">
+                <CardHeader className="pb-2">
+                  <Tabs.List className="flex gap-1 rounded-lg bg-muted p-1">
+                    <Tabs.Trigger
+                      value="queue"
+                      className="flex-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                    >
+                      队列
+                    </Tabs.Trigger>
+                    <Tabs.Trigger
+                      value="canvas"
+                      className="flex-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                    >
+                      编排画布
+                    </Tabs.Trigger>
+                  </Tabs.List>
+                </CardHeader>
+                <CardContent className="h-[calc(100%-3rem)] min-h-0 overflow-hidden pr-1">
+                  <Tabs.Content
+                    value="queue"
+                    className="h-full space-y-2 overflow-y-auto pr-1"
+                  >
+                    {agents.map((a) => (
+                      <AgentCard
+                        key={a.role_key}
+                        agent={a}
+                        active={selectedAgent === a.role_key}
+                        onClick={() =>
+                          setSelectedAgent((s) => (s === a.role_key ? null : a.role_key))
+                        }
+                      />
+                    ))}
+                  </Tabs.Content>
+                  <Tabs.Content value="canvas" className="h-full">
+                    <OrchestrationCanvas
+                      agents={agents}
+                      selectedAgent={selectedAgent}
+                      onSelect={(k) => setSelectedAgent((s) => (s === k ? null : k))}
+                    />
+                  </Tabs.Content>
+                </CardContent>
+              </Tabs.Root>
             </Card>
           </Panel>
 
