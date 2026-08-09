@@ -183,7 +183,7 @@ docker run --rm -p 8000:8000 bizatlas:0.3.0
 - 与 FastToken 等其他服务互不干扰（独立目录/端口）。
 - ⚠️ 公网访问 8080 需在**阿里云安全组放行 8080 入站**。
 
-> **命名说明**：本仓库 GitHub 名为 `MiLab-Bit/GOPA`（历史名保留），产品 / 工程代号与 Python 包名均为 **BizAtlas / `bizatlas`**。请勿混用。
+> **命名说明**：本仓库 GitHub 即 [`MiLab-Bit/BizAtlas`](https://github.com/MiLab-Bit/BizAtlas)；产品 / 工程代号与 Python 包名均为 **BizAtlas / `bizatlas`**。（早期曾用名 GOPA，已弃用。）
 
 ---
 
