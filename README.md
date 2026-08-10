@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/bizatlas-logo.svg" alt="商舆 BizAtlas" width="168" />
+  <img src="docs/assets/bizatlas-logo.jpg" alt="商舆 BizAtlas" width="360" />
 </p>
 
 <h1 align="center">商舆 BizAtlas</h1>
