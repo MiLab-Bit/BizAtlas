@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     bizatlas_auth_disabled: bool = True
     bizatlas_auth_secret: str = ""
 
+    # 一次性首管理员引导令牌：设非空时，/v1/admin/bootstrap 在系统无 admin 时可用。
+    # 留空则该端点永久 401（禁用引导）。建议部署时生成一个强随机值。
+    bizatlas_bootstrap_token: str = ""
+
     # —— 邮箱用户系统（身份基础设施）：令牌时效（秒）——
     # 访问令牌短时效（默认 15 分钟），刷新令牌长时效（默认 7 天）。
     bizatlas_token_access_ttl: int = 900

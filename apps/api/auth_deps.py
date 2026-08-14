@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from typing import Optional
 
+import hashlib
+
 from fastapi import Depends, Header, HTTPException
 
 from bizatlas.auth.rbac import (
@@ -24,6 +26,7 @@ from bizatlas.auth.rbac import (
     verify_token,
 )
 from bizatlas.config import get_settings
+from bizatlas.identity import apikeys as _apikeys
 
 
 def get_principal(authorization: Optional[str] = Header(default=None)) -> Principal:
@@ -33,6 +36,14 @@ def get_principal(authorization: Optional[str] = Header(default=None)) -> Princi
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     token = authorization[len("Bearer ") :].strip()
+    # 1) Agent API Key（机器凭证）：哈希匹配且 active → 以所属账号身份放行
+    rec = _apikeys.get_api_key_by_hash(hashlib.sha256(token.encode("utf-8")).hexdigest())
+    if rec and rec["status"] == "active":
+        _apikeys.touch_api_key(rec["id"])
+        owner = _apikeys.principal_for_owner(rec["owner_id"])
+        if owner:
+            return owner
+    # 2) 人工 JWT
     try:
         return verify_token(token, settings.bizatlas_auth_secret)
     except TokenInvalid as exc:
@@ -76,6 +87,11 @@ def resolve_principal(authorization: Optional[str] = Header(default=None)) -> Pr
     settings = get_settings()
     if authorization and authorization.startswith("Bearer "):
         token = authorization[len("Bearer ") :].strip()
+        rec = _apikeys.get_api_key_by_hash(hashlib.sha256(token.encode("utf-8")).hexdigest())
+        if rec and rec["status"] == "active":
+            owner = _apikeys.principal_for_owner(rec["owner_id"])
+            if owner:
+                return owner
         try:
             return verify_token(token, settings.bizatlas_auth_secret)
         except TokenInvalid as exc:

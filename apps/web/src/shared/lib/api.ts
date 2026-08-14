@@ -653,3 +653,76 @@ export function resetPassword(token: string, newPassword: string) {
     },
   );
 }
+
+// —— 用户自带大模型供应商密钥（模型配置）——
+export const ProviderPresetSchema = z.object({
+  provider: z.string(),
+  label: z.string(),
+  baseUrl: z.string(),
+  defaultModel: z.string(),
+});
+export type ProviderPreset = z.output<typeof ProviderPresetSchema>;
+
+export const ModelProviderSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  provider: z.string(),
+  base_url: z.string().nullable().optional(),
+  model: z.string().nullable().optional(),
+  status: z.string(),
+  last_error: z.string().nullable().optional(),
+  last_tested_at: z.string().nullable().optional(),
+  created_at: z.string(),
+});
+export type ModelProvider = z.output<typeof ModelProviderSchema>;
+
+export function listProviderPresets(): Promise<ProviderPreset[]> {
+  return getEnvelope("/v1/auth/model-providers/presets", z.object({ providers: z.array(ProviderPresetSchema) }))
+    .then((d) => d.providers);
+}
+
+export function listModelProviders(): Promise<ModelProvider[]> {
+  return getEnvelope("/v1/auth/model-providers", z.object({ providers: z.array(ModelProviderSchema) }))
+    .then((d) => d.providers);
+}
+
+export async function testModelProvider(input: {
+  provider: string;
+  apiKey: string;
+  baseUrl?: string;
+  model?: string;
+}): Promise<{ ok: boolean; latency_ms: number; error?: string; model?: string }> {
+  return getEnvelope(
+    "/v1/auth/model-providers/test",
+    z.object({ ok: z.boolean(), latency_ms: z.number(), error: z.string().optional(), model: z.string().optional() }),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export async function createModelProvider(input: {
+  name: string;
+  provider: string;
+  apiKey: string;
+  baseUrl?: string;
+  model?: string;
+}): Promise<{ provider: ModelProvider; test: Record<string, unknown> }> {
+  return getEnvelope(
+    "/v1/auth/model-providers",
+    z.object({ provider: ModelProviderSchema, test: z.record(z.unknown()) }),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export async function deleteModelProvider(id: string): Promise<void> {
+  await getEnvelope(`/v1/auth/model-providers/${id}`, z.record(z.unknown()), {
+    method: "DELETE",
+  });
+}

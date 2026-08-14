@@ -80,6 +80,19 @@ CREATE TABLE IF NOT EXISTS email_verifications (
   consumed_at TEXT,
   created_at  TEXT DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS api_keys (
+  id          TEXT PRIMARY KEY,
+  owner_id    TEXT NOT NULL,   -- users.public_id（与人工 JWT 的 Principal.user_id 一致）
+  name        TEXT NOT NULL,
+  key_hash    TEXT NOT NULL,
+  prefix      TEXT NOT NULL,
+  scopes      TEXT NOT NULL DEFAULT '["*"]',
+  status      TEXT NOT NULL DEFAULT 'active',  -- active | revoked
+  last_used_at TEXT,
+  created_at  TEXT DEFAULT CURRENT_TIMESTAMP,
+  revoked_at  TEXT
+);
 """
 
 

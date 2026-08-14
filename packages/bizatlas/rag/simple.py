@@ -181,3 +181,103 @@ def ask_company(
         "confidence": hits[0]["score"],
         "llm_used": llm_used,
     }
+
+
+def _split_sentences(text: str) -> list[str]:
+    """抽取式回退时按句切分，便于逐段流式输出。"""
+    import re
+
+    parts = re.split(r"(?<=[。！？\n])", text)
+    return [p for p in parts if p.strip()]
+
+
+def stream_ask_company(
+    question: str,
+    *,
+    company_id: str | None = None,
+    fixture_id: str | None = None,
+    provider: dict[str, Any] | None = None,
+) -> Any:
+    """流式版 ask_company：返回生成器，依次 yield 事件 dict：
+      {"type":"meta","citations":[...],"confidence":float,"llm_used":bool}
+      {"type":"token","text":str}            # 逐段文本
+      {"type":"done"}
+    仅 ask_doc 意图使用；命中缓存时 chat_completion(stream=True) 重放缓存，仍按 chunk 输出。
+    """
+    doc_ids = None
+    if fixture_id:
+        doc_id = ensure_fixture_index(fixture_id)
+        doc_ids = [doc_id]
+    chunks = _load_chunks(doc_ids)
+    if not chunks and company_id:
+        chunks = _load_chunks(None)
+
+    hits = _tfidf_rank(question, chunks, top_k=3)
+    if not hits:
+        yield {
+            "type": "meta",
+            "citations": [],
+            "confidence": 0.0,
+            "llm_used": False,
+        }
+        yield {
+            "type": "token",
+            "text": "未在本地资料中检索到相关片段。请先上传资料或选择含文本的案例。",
+        }
+        yield {"type": "done"}
+        return
+
+    citations = [
+        {
+            "chunk_id": h.get("id"),
+            "document_id": h.get("document_id"),
+            "page": h.get("page"),
+            "score": h.get("score"),
+            "snippet": (h.get("content") or "")[:160],
+        }
+        for h in hits
+    ]
+    context = "\n---\n".join((h.get("content") or "")[:480] for h in hits)
+
+    yield {
+        "type": "meta",
+        "citations": citations,
+        "confidence": hits[0]["score"],
+        "llm_used": True,
+    }
+
+    try:
+        from bizatlas.llm.client import chat_completion, llm_configured
+
+        if llm_configured():
+            for tok in chat_completion(
+                [
+                    {
+                        "role": "system",
+                        "content": (
+                            "你是 BizAtlas 企业风险研判助手。只根据用户提供的【资料片段】作答；"
+                            "禁止编造任何财务数字、比例、日期或结论。"
+                            "片段中没有的信息请明确说「资料未提及」。用简洁中文回答。"
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": f"【资料片段】\n{context}\n\n【问题】\n{question}",
+                    },
+                ],
+                temperature=0.2,
+                max_tokens=700,
+                stream=True,
+                provider=provider,
+            ):
+                yield {"type": "token", "text": tok}
+        else:
+            raise LLMUnavailable("LLM not configured")
+    except Exception:  # noqa: BLE001 — 回退抽取式拼接
+        extract = "根据本地资料（摘录）：\n" + "\n---\n".join(
+            (h.get("content") or "")[:240] for h in hits
+        )
+        for piece in _split_sentences(extract):
+            yield {"type": "token", "text": piece}
+
+    yield {"type": "done"}
