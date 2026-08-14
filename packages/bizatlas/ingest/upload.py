@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import uuid
+
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 from bizatlas.contracts.models import Evidence, MetricValue
 from bizatlas.data import repo
@@ -20,8 +23,13 @@ def ingest_metrics_file(company_id: str, filename: str, content: bytes) -> dict:
             "模板见 content/templates/"
         )
 
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise ValueError(f"文件过大（上限 {MAX_UPLOAD_BYTES // (1024 * 1024)}MB）")
     dest_dir = repo.upload_dir_for(company_id)
-    dest = dest_dir / filename
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = Path(filename).name  # 去除目录成分，防路径遍历
+    suffix = Path(safe_name).suffix.lower()
+    dest = dest_dir / f"{uuid.uuid4().hex}{suffix}"
     dest.write_bytes(content)
 
     metrics: list[MetricValue]

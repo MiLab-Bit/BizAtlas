@@ -69,7 +69,11 @@ def score_risk(
         total += dim_score * weight
 
     total = min(100.0, round(total, 2))
+    completeness = round(min(1.0, len(metrics) / 8), 2)
     grade = _grade(total, veto_reason is not None)
+    # 数据不足时不得给出误导性的 GREEN：未知≠安全，标注 UNRATED
+    if not veto_reason and completeness < 0.5:
+        grade = RiskGrade.UNRATED
 
     top = sorted(hits, key=lambda h: SEVERITY_SCORE.get(h.severity, 0), reverse=True)
     if veto_reason:
@@ -106,11 +110,12 @@ def score_risk(
         hits=hits,
         veto=VetoInfo(triggered=veto_reason is not None, reason=veto_reason),
         quality=QualityInfo(
-            completeness=round(min(1.0, len(metrics) / 8), 2),
+            completeness=completeness,
             conflicts=conflicts,
             tier_mix=tier_mix,
         ),
         evidence_refs=evidence_refs,
+        ratable=(grade != RiskGrade.UNRATED),
         scoring=ScoringSnapshot(
             scoring_version="1.0.0",
             weight_snapshot=dict(DIMENSION_WEIGHTS),

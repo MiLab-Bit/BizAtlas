@@ -12,6 +12,7 @@ import {
   User as UserIcon,
   Database,
   Bot,
+  KeyRound,
 } from "lucide-react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { fetchHealth } from "@/shared/lib/api";
@@ -89,6 +90,7 @@ export function Shell() {
               ["/rules", "规则中心", Scale, "自定义风险规则", false],
               ["/investigation", "Agent调查", Network, "多 Agent 协作过程回放", false],
               ["/engineering", "工程能力", Bot, "Agent 编排与技术架构说明", false],
+              ["/model-config", "模型配置", KeyRound, "配置你自己的大模型供应商密钥", false],
             ] as const
           ).map(([to, label, Icon, hint, end]) => (
             <NavLink

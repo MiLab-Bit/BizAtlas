@@ -15,6 +15,7 @@ class RiskGrade(str, Enum):
     ORANGE = "ORANGE"
     RED = "RED"
     BLACK = "BLACK"
+    UNRATED = "UNRATED"
 
 
 class DataTier(str, Enum):
@@ -117,6 +118,7 @@ class ScoringSnapshot(BaseModel):
 class RiskResult(BaseModel):
     company_id: str
     grade: RiskGrade
+    ratable: bool = True
     score: float
     headline: str
     dimensions: list[DimensionScore] = Field(default_factory=list)
