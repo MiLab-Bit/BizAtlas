@@ -1,0 +1,84 @@
+:root {
+  /* 白金研判台：冷白机构感，单色强调，无土色、无赛博霓虹 */
+  --bg: #f4f6f9;
+  --bg-deep: #e8edf3;
+  --ink: #0f172a;
+  --ink-soft: #1e293b;
+  --muted: #64748b;
+  --panel: #ffffff;
+  --panel-solid: #ffffff;
+  --line: rgba(15, 23, 42, 0.08);
+  --line-strong: rgba(15, 23, 42, 0.14);
+  --brand: #0f172a;
+  --brand-soft: #334155;
+  --signal: #155eef; /* 机构蓝 */
+  --signal-dim: rgba(21, 94, 239, 0.08);
+  --seal: #e11d48;
+  --seal-soft: rgba(225, 29, 72, 0.08);
+  --accent: #0f766e;
+  --accent-soft: rgba(15, 118, 110, 0.08);
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.04);
+  --radius: 10px;
+  --radius-sm: 8px;
+  --grade-green: #059669;
+  --grade-yellow: #d97706;
+  --grade-orange: #ea580c;
+  --grade-red: #e11d48;
+  --grade-black: #0f172a;
+  --font-display: "Noto Sans SC", "Plus Jakarta Sans", "PingFang SC", sans-serif;
+  --font-ui: "Plus Jakarta Sans", "Noto Sans SC", "PingFang SC", sans-serif;
+  --font-body: "Noto Sans SC", "Plus Jakarta Sans", "PingFang SC", sans-serif;
+  --font-mono: "Plus Jakarta Sans", "Noto Sans SC", ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--ink);
+  background:
+    radial-gradient(900px 420px at 100% 0%, rgba(21, 94, 239, 0.06), transparent 55%),
+    radial-gradient(700px 380px at 0% 100%, rgba(15, 118, 110, 0.05), transparent 50%),
+    linear-gradient(180deg, #f8fafc 0%, var(--bg) 40%, var(--bg-deep) 100%);
+  background-attachment: fixed;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: rgba(21, 94, 239, 0.16);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bar-in {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}

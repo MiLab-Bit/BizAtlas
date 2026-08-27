@@ -1,0 +1,10 @@
+{
+  "nodes": [
+    { "id": "n0", "name": "安稳制造", "category": "主体", "risk": "self" },
+    { "id": "n1", "name": "同业配套方", "category": "担保", "risk": "normal" }
+  ],
+  "edges": [
+    { "source": "n0", "target": "n1", "rel": "有限担保" }
+  ],
+  "note": "健康案例：担保链浅、风险可控（演示数据）"
+}

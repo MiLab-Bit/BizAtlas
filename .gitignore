@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+bizvenv/
+venv/
+
+# Local data & DB (runtime artifacts at repo root, NOT packages/bizatlas/data source dir)
+/data/
+*.sqlite
+*.db
+
+# Exports & integrity receipts (generated at runtime)
+/exports/
+*.integrity.json
+
+# Uploaded documents (runtime artifacts)
+/uploads/
+
+# Test / coverage
+.coverage
+.coverage*
+.cov*
+htmlcov/
+.pytest_cache/
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Secrets (keep .env.example tracked, ignore real .env)
+.env
+.env.*
+
+# Frontend (Vite/React build artifacts & deps)
+node_modules/
+dist/
+apps/web/dist/
+*.tsbuildinfo
+.vite/
+
+# Local secrets / credentials — added 2026-08-27 git bootstrap (do NOT commit)
+cfd_creds.json
+.cf_token
+config.yml
+backups/

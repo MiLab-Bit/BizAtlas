@@ -1,0 +1,20 @@
+# 构建镜像时排除：本地虚拟环境、版本控制、运行时数据、产物、前端依赖
+bizvenv
+.venv
+.git
+.gitignore
+__pycache__
+*.pyc
+.pytest_cache
+.coverage
+htmlcov
+data
+uploads
+exports
+.env
+.env.*
+node_modules
+apps/web/node_modules
+*.log
+.ai
+.workbuddy
