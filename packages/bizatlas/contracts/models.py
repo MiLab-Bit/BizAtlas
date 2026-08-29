@@ -113,6 +113,8 @@ class ScoringSnapshot(BaseModel):
     scoring_version: str = "1.0.0"
     weight_snapshot: dict[str, float] = Field(default_factory=dict)
     severity_snapshot: dict[str, float] = Field(default_factory=dict)
+    # 连续亏损等代理预警的抬分政策（可空）；写入快照便于审计复现
+    early_warning: dict[str, Any] | None = None
 
 
 class RiskResult(BaseModel):

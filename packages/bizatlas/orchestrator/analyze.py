@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from bizatlas.contracts.models import AnalyzeRequest, MetricValue, RiskResult
@@ -59,11 +60,77 @@ def _resolve_inputs(
     return company_id, metrics, alt, events, meta, None
 
 
+def _want_skip_polish(opts: dict[str, Any]) -> bool:
+    """贷前快路径 / demo：跳过 LLM 润色，数字与决策本就不依赖 LLM。"""
+    if opts.get("skip_polish") is True or opts.get("fast") is True:
+        return True
+    # 显式 false 才强制润色；缺省保持历史行为（会润色）
+    return False
+
+
+def _apply_llm_polish(
+    *,
+    headline: str,
+    risk_dump: dict[str, Any],
+    metrics_dump: list[dict[str, Any]],
+    attribution: list[dict[str, Any]],
+) -> tuple[str, dict[str, Any], list[dict[str, Any]]]:
+    """并行润色结论句 + 最高分两维归因；任一步失败回退模板，控延迟。"""
+    from bizatlas.llm.polish import explain_attribution_dim, polish_headline
+
+    headline_meta = {"polished": False, "llm_used": False, "gate_ok": True}
+    ranked = sorted(attribution, key=lambda d: float(d.get("score") or 0), reverse=True)
+    explain_targets = [d for d in ranked[:2] if d.get("id")]
+
+    def _headline_job() -> dict[str, Any]:
+        return polish_headline(headline, metrics=metrics_dump, risk=risk_dump)
+
+    def _dim_job(dim: dict[str, Any]) -> tuple[str, str]:
+        return str(dim.get("id")), explain_attribution_dim(
+            dim, metrics=metrics_dump, risk=risk_dump
+        )
+
+    narratives: dict[str, str] = {}
+    try:
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            futures = {pool.submit(_headline_job): "headline"}
+            for dim in explain_targets:
+                futures[pool.submit(_dim_job, dim)] = f"dim:{dim.get('id')}"
+            for fut in as_completed(futures):
+                key = futures[fut]
+                try:
+                    result = fut.result()
+                except Exception:  # noqa: BLE001
+                    continue
+                if key == "headline" and isinstance(result, dict):
+                    headline = result.get("text") or headline
+                    headline_meta = {
+                        "polished": bool(result.get("polished")),
+                        "llm_used": bool(result.get("llm_used")),
+                        "gate_ok": bool(result.get("gate_ok", True)),
+                    }
+                    risk_dump["headline"] = headline
+                elif key.startswith("dim:") and isinstance(result, tuple):
+                    dim_id, text = result
+                    narratives[dim_id] = text or ""
+    except Exception:  # noqa: BLE001
+        pass
+
+    for dim in attribution:
+        dim_id = dim.get("id")
+        if dim_id in narratives:
+            dim["narrative"] = narratives[dim_id]
+        else:
+            dim.setdefault("narrative", "")
+    return headline, headline_meta, attribution
+
+
 def run_analyze(req: AnalyzeRequest) -> dict[str, Any]:
     company_id, metrics, alt_metrics, events, meta, fixture_id = _resolve_inputs(req.company_id)
     opts = req.options or {}
     include_stress = bool(opts.get("include_stress", True))
     include_kg = bool(opts.get("include_kg", True))
+    skip_polish = _want_skip_polish(opts)
 
     observations = list(metrics) + list(alt_metrics)
     conflicts = detect_conflicts(observations)
@@ -80,43 +147,31 @@ def run_analyze(req: AnalyzeRequest) -> dict[str, Any]:
     risk_dump = risk.model_dump(mode="json")
     metrics_dump = [m.model_dump(mode="json") for m in metrics]
 
-    # 结论句：LLM 润色 + Number Gate（失败回退模板句）
     headline = risk.headline
-    headline_meta = {"polished": False, "llm_used": False, "gate_ok": True}
+    headline_meta = {"polished": False, "llm_used": False, "gate_ok": True, "skipped": skip_polish}
+
     try:
-        from bizatlas.llm.polish import polish_headline
-
-        polished_h = polish_headline(headline, metrics=metrics_dump, risk=risk_dump)
-        headline = polished_h["text"]
-        headline_meta = {
-            "polished": polished_h["polished"],
-            "llm_used": polished_h["llm_used"],
-            "gate_ok": polished_h["gate_ok"],
-        }
-        risk_dump["headline"] = headline
-    except Exception:  # noqa: BLE001
+        if repo.get_company(company_id):
+            repo.save_risk_score(company_id, risk_dump)
+    except Exception:  # noqa: BLE001 — fixture / 空库场景不阻断研判
         pass
-
-    if repo.get_company(company_id):
-        repo.save_risk_score(company_id, risk_dump)
 
     graph = build_guarantee_graph(company_id, fixture_id=fixture_id) if include_kg else None
     attribution = build_attribution(risk.dimensions, hits, metrics)
 
-    # 五维归因人话解说：仅高分维度（控延迟），只翻译不另算分
-    try:
-        from bizatlas.llm.polish import explain_attribution_dim
-
-        ranked = sorted(attribution, key=lambda d: float(d.get("score") or 0), reverse=True)
-        explain_ids = {d.get("id") for d in ranked[:2]}
-        for dim in attribution:
-            if dim.get("id") in explain_ids:
-                dim["narrative"] = explain_attribution_dim(
-                    dim, metrics=metrics_dump, risk=risk_dump
-                )
-            else:
+    if not skip_polish:
+        try:
+            headline, headline_meta, attribution = _apply_llm_polish(
+                headline=headline,
+                risk_dump=risk_dump,
+                metrics_dump=metrics_dump,
+                attribution=attribution,
+            )
+            headline_meta["skipped"] = False
+        except Exception:  # noqa: BLE001
+            for dim in attribution:
                 dim.setdefault("narrative", "")
-    except Exception:  # noqa: BLE001
+    else:
         for dim in attribution:
             dim.setdefault("narrative", "")
 
@@ -150,6 +205,7 @@ def run_analyze(req: AnalyzeRequest) -> dict[str, Any]:
         "conflicts": conflicts,
         "industry_benchmark": industry,
         "stress": stress,
+        "fast_path": skip_polish,
         "citations": [
             {
                 "id": m.source.ref if m.source else m.name,

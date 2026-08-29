@@ -36,6 +36,12 @@ def readiness() -> dict[str, Any]:
         db_ok = False
         db_error = str(exc)
 
+    from bizatlas.llm.client import llm_configured
+    from bizatlas.bootstrap import last_bootstrap
+
+    boot = last_bootstrap()
+    compliance = boot.get("compliance") or {}
+    # 合规缺口不阻断就绪（演示可继续），但显式暴露给探针
     status = "ok" if db_ok else "degraded"
     return {
         "status": status,
@@ -44,4 +50,14 @@ def readiness() -> dict[str, Any]:
         "db_ok": db_ok,
         "db_error": db_error,
         "mode": settings.bizatlas_mode,
+        "llm_configured": llm_configured(),
+        "llm_seeded": bool((boot.get("llm_seed") or {}).get("seeded"))
+        or bool((boot.get("llm_seed") or {}).get("provider_id")),
+        "compliance": {
+            "checked": bool(compliance.get("checked")),
+            "consistent": bool(compliance.get("consistent", True)),
+            "running_not_declared": list(compliance.get("running_not_declared") or []),
+            "declared_not_running": list(compliance.get("declared_not_running") or []),
+            "reason": compliance.get("reason") or "",
+        },
     }

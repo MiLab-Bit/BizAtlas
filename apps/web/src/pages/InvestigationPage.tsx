@@ -81,8 +81,8 @@ export function InvestigationPage() {
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // —— 实时 SSE 模式 ——
-  const [live, setLive] = useState(false);
+  // —— 实时 SSE 模式（默认开启，演示优先出分） ——
+  const [live, setLive] = useState(true);
   const [liveEvents, setLiveEvents] = useState<TraceEvent[]>([]);
   const [liveAgents, setLiveAgents] = useState<AgentTrace[]>(() => seedAgents());
   const [liveToolCalls, setLiveToolCalls] = useState<ToolCall[]>([]);
@@ -147,10 +147,10 @@ export function InvestigationPage() {
             agent: ev.role,
             agent_label: ev.label,
             type: "agent_done",
-            message: `${ev.label} 完成`,
-            level: "info",
+            message: ev.summary ? `${ev.label} 完成 · ${ev.summary}` : `${ev.label} 完成`,
+            level: ev.ok ? "info" : "warn",
           });
-        } else if (ev.type === "done") {
+        } else if (ev.type === "done" && ev.trace) {
           setLiveAgents(ev.trace.agents as AgentTrace[]);
           setLiveToolCalls(ev.trace.tool_calls as ToolCall[]);
           setLiveEvidence(ev.trace.evidence as EvidenceItem[]);
@@ -160,7 +160,7 @@ export function InvestigationPage() {
       },
       onEnd: () => setLiveDone(true),
       onError: () => setLiveDone(true),
-    });
+    }, true); // fast=true：跳过 LLM 润色，控演示延迟
     return () => es.close();
   }, [live, selectedFixture]);
 

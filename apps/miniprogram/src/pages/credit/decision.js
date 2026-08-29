@@ -28,9 +28,16 @@ Page({
     app.request({
       url: '/credit/decision',
       method: 'POST',
-      data: { company_id: companyId, applied_amount: appliedAmount, tenor_months: tenorMonths }
+      data: {
+        company_id: companyId,
+        applied_amount: appliedAmount,
+        tenor_months: tenorMonths,
+        skip_polish: true,
+        include_stress: false
+      }
     }).then((res) => {
-      const d = (res.data || res)
+      const envelope = (res && res.data) ? res.data : res
+      const d = (envelope && envelope.decision) ? envelope.decision : envelope
       const decisionStyle = this._decisionStyle(d.decision)
       this.setData({
         result: {
@@ -38,7 +45,7 @@ Page({
           decisionLabel: decisionStyle.label,
           decisionColor: decisionStyle.color,
           decisionBg: decisionStyle.bg,
-          gradeStyle: gradeStyle(d.grade || d.risk_grade)
+          gradeStyle: gradeStyle(d.risk_grade || d.grade)
         }
       })
     }).catch((err) => {

@@ -64,6 +64,25 @@ rules:
     condition: { type: threshold, metric: ROE, op: "<", value: 0.05 }
     message: ROE 低于 5%
 
+  - id: R1011
+    name: 连续亏损预警
+    dimension: 财务
+    severity: 高
+    status: active
+    contribute_to_score: true
+    condition: { type: threshold, metric: 连续亏损年数, op: ">=", value: 2 }
+    message: 连续亏损年数≥2，触及 ST 风险警示代理条件（非监管原文）
+
+  - id: R1012
+    name: 连续两年扣非净利为负
+    dimension: 财务
+    severity: 高
+    status: active
+    # 与 R1011 互为证据口径；事件命中不计双份分，由 early_warning 加分统一处理
+    contribute_to_score: false
+    condition: { type: event, event: 连续两年扣非净利为负 }
+    message: 连续两年扣非净利为负（ST 实施代理标签，公开可核验财务口径）
+
   - id: R1009
     name: 流动比率关注带
     dimension: 财务

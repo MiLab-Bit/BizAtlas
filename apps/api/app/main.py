@@ -92,6 +92,14 @@ async def lifespan(app: FastAPI):
     # 阶段 3：启动初始化（替代已废弃的 @app.on_event("startup")）
     init_db()
     register_default_tools()
+    # Phase C：.env → platform LLM seed + 合规对账自检（缺口只告警）
+    try:
+        from bizatlas.bootstrap import run_startup_bootstrap
+
+        boot = run_startup_bootstrap()
+        app.state.bootstrap = boot
+    except Exception as exc:  # noqa: BLE001
+        app.state.bootstrap = {"error": str(exc)}
     yield
 
 
@@ -342,19 +350,29 @@ def analyze_pipeline(req: AnalyzeRequest) -> Envelope[dict]:
 
 
 @app.get("/v1/analyze/pipeline/stream")
-def analyze_pipeline_stream(company_id: str, task: str = "analyze_risk"):
+def analyze_pipeline_stream(
+    company_id: str,
+    task: str = "analyze_risk",
+    fast: bool = False,
+):
     """多 Agent 管线实时流（SSE）：逐步推送 Agent 状态/事件，结束时附完整 trace。
 
     前端用 EventSource 订阅（GET，便于经 vite 代理同源）。开发态鉴权关闭，无需令牌。
     P1-4：用后台线程驱动管线、队列取事件，空闲 15s 发送 SSE 注释心跳 ": ping"，
     防止 nginx/cloudflared 等长连接因空闲被中间层掐断。
+
+    fast=true：评分内核跳过 LLM 润色，优先出 grade/score（演示控延迟）。
     """
     import json
 
     from bizatlas.contracts.models import AnalyzeRequest
     from bizatlas.orchestrator.stream import stream_analysis_pipeline
 
-    req = AnalyzeRequest(company_id=company_id, intent=task)
+    req = AnalyzeRequest(
+        company_id=company_id,
+        intent=task,
+        options={"skip_polish": fast, "fast": fast, "include_stress": not fast},
+    )
 
     def event_gen():
         q: "queue.Queue[tuple]" = queue.Queue()
@@ -1350,7 +1368,11 @@ class CreditDecisionRequest(BaseModel):
     )
     tenor_months: int | None = Field(default=None, description="申请期限（月）")
     product: str = Field(default="流动资金贷款", description="授信产品名")
-    include_stress: bool = Field(default=True, description="是否附带压力测试")
+    include_stress: bool = Field(default=False, description="是否附带压力测试（贷前默认关，控延迟）")
+    skip_polish: bool = Field(
+        default=True,
+        description="跳过 LLM 润色。决策数字本就不经 LLM，默认开启快路径",
+    )
 
 
 @app.post("/v1/credit/decision")
@@ -1370,7 +1392,12 @@ def credit_decision(req: CreditDecisionRequest) -> Envelope[dict]:
     analyze_req = AnalyzeRequest(
         company_id=req.company_id,
         intent="analyze_risk",
-        options={"include_stress": req.include_stress, "include_kg": True},
+        options={
+            "include_stress": req.include_stress,
+            "include_kg": True,
+            "skip_polish": req.skip_polish,
+            "fast": req.skip_polish,
+        },
     )
     try:
         result = run_analyze(analyze_req)
@@ -1390,6 +1417,7 @@ def credit_decision(req: CreditDecisionRequest) -> Envelope[dict]:
             "scenario": "pre_lending_credit_admission",
             "manual_gate_required": decision["manual_gate"]["required"],
             "llm_used_for_numbers": False,
+            "fast_path": bool(req.skip_polish),
             "mode": settings.bizatlas_mode,
         },
     )

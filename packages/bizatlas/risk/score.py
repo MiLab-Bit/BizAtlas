@@ -23,6 +23,13 @@ DIMENSION_WEIGHTS = {
 
 SEVERITY_SCORE = {"高": 25.0, "中": 12.0, "低": 5.0}
 
+# 连续亏损代理预警：纯财务加权很难摸到 ORANGE（财务维上限仅 30 分），
+# 对「连续 2 年扣非/净利为负」追加固定加分（非地板），并在评分快照中披露口径。
+EARLY_WARNING_BOOST = 18.0
+EARLY_WARNING_SCORE_FLOOR = 45.0  # 仅用于披露/文档，打分走 BOOST
+EARLY_WARNING_RULE_IDS = {"R1011", "R1012"}
+EARLY_WARNING_EVENTS = {"连续两年扣非净利为负", "连续亏损"}
+
 
 def _grade(score: float, veto: bool) -> RiskGrade:
     if veto:
@@ -36,6 +43,28 @@ def _grade(score: float, veto: bool) -> RiskGrade:
     if score < 80:
         return RiskGrade.RED
     return RiskGrade.BLACK
+
+
+def _detect_consecutive_loss(
+    metrics: list[MetricValue],
+    events: dict,
+    hits: list[RuleHit],
+) -> tuple[bool, str]:
+    """检测连续亏损代理条件。返回 (是否命中, 依据说明)。"""
+    for flag in EARLY_WARNING_EVENTS:
+        if events.get(flag):
+            return True, f"事件「{flag}」为真（ST 代理标签，非监管原文）"
+    for m in metrics:
+        if m.name == "连续亏损年数" and m.value is not None:
+            try:
+                if float(m.value) >= 2:
+                    return True, f"指标「连续亏损年数」={m.value} ≥ 2"
+            except (TypeError, ValueError):
+                pass
+    for h in hits:
+        if h.rule_id in EARLY_WARNING_RULE_IDS and h.contribute_to_score:
+            return True, f"规则 {h.rule_id}·{h.name} 命中"
+    return False, ""
 
 
 def score_risk(
@@ -70,6 +99,15 @@ def score_risk(
 
     total = min(100.0, round(total, 2))
     completeness = round(min(1.0, len(metrics) / 8), 2)
+
+    early_warning, early_basis = _detect_consecutive_loss(metrics, events, hits)
+    early_warning_applied = False
+    if early_warning and not veto_reason:
+        # 加分制（非地板）：保留与健康样本的分数重叠，避免 AUC 虚高
+        boost = EARLY_WARNING_BOOST
+        total = min(100.0, round(total + boost, 2))
+        early_warning_applied = True
+
     grade = _grade(total, veto_reason is not None)
     # 数据不足时不得给出误导性的 GREEN：未知≠安全，标注 UNRATED
     if not veto_reason and completeness < 0.5:
@@ -78,6 +116,8 @@ def score_risk(
     top = sorted(hits, key=lambda h: SEVERITY_SCORE.get(h.severity, 0), reverse=True)
     if veto_reason:
         headline = f"重大风险——{veto_reason}"
+    elif early_warning_applied:
+        headline = f"建议谨慎——连续亏损代理预警已触发（{early_basis}）"
     elif top:
         headline = f"{'建议谨慎' if total >= 40 else '整体可控'}——{top[0].message}"
     elif metrics:
@@ -101,6 +141,20 @@ def score_risk(
     seen: set[str] = set()
     evidence_refs = [e for e in evidence_refs if not (e in seen or seen.add(e))]
 
+    early_warning_meta: dict | None = None
+    if early_warning:
+        early_warning_meta = {
+            "triggered": True,
+            "applied_boost": early_warning_applied,
+            "boost": EARLY_WARNING_BOOST,
+            "basis": early_basis,
+            "disclosure": (
+                "连续 2 年扣非/净利为负为 ST 风险警示的公开代理条件，"
+                "非监管「被实施 ST 起始年」原文；"
+                f"命中后追加 {EARLY_WARNING_BOOST} 分风险分（加分制，非硬地板），可审计。"
+            ),
+        }
+
     return RiskResult(
         company_id=company_id,
         grade=grade,
@@ -117,9 +171,10 @@ def score_risk(
         evidence_refs=evidence_refs,
         ratable=(grade != RiskGrade.UNRATED),
         scoring=ScoringSnapshot(
-            scoring_version="1.0.0",
+            scoring_version="1.1.0",
             weight_snapshot=dict(DIMENSION_WEIGHTS),
             severity_snapshot=dict(SEVERITY_SCORE),
+            early_warning=early_warning_meta,
         ),
         computed_at=datetime.now(UTC),
     )

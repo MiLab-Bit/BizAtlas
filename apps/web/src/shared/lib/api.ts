@@ -348,7 +348,12 @@ export function createCompany(name: string, industry = "") {
   });
 }
 
-export function postAnalyze(companyId: string, intent = "analyze_risk", includeStress = true) {
+export function postAnalyze(
+  companyId: string,
+  intent = "analyze_risk",
+  includeStress = true,
+  fast = true,
+) {
   return getEnvelope("/v1/analyze", AnalyzeSchema, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -357,7 +362,12 @@ export function postAnalyze(companyId: string, intent = "analyze_risk", includeS
       intent,
       message: "帮我看风险",
       template_id: intent === "gen_report" ? "risk_onepager" : null,
-      options: { include_stress: includeStress, include_kg: true },
+      options: {
+        include_stress: includeStress && !fast,
+        include_kg: true,
+        skip_polish: fast,
+        fast,
+      },
     }),
   });
 }
@@ -366,6 +376,7 @@ export function postAnalyzePipeline(
   companyId: string,
   intent = "analyze_risk",
   includeStress = true,
+  fast = false,
 ) {
   return getEnvelope("/v1/analyze/pipeline", AnalyzePipelineSchema, {
     method: "POST",
@@ -375,7 +386,12 @@ export function postAnalyzePipeline(
       intent,
       message: "进入调查",
       template_id: null,
-      options: { include_stress: includeStress, include_kg: true },
+      options: {
+        include_stress: includeStress && !fast,
+        include_kg: true,
+        skip_polish: fast,
+        fast,
+      },
     }),
   });
 }
@@ -388,8 +404,13 @@ export function subscribePipelineStream(
     onEnd?: () => void;
     onError?: (err: Event) => void;
   },
+  fast = true,
 ): EventSource {
-  const params = new URLSearchParams({ company_id: companyId, task: intent });
+  const params = new URLSearchParams({
+    company_id: companyId,
+    task: intent,
+    fast: fast ? "true" : "false",
+  });
   const es = new EventSource(
     `${API_BASE}/v1/analyze/pipeline/stream?${params.toString()}`,
   );
@@ -822,22 +843,32 @@ export interface ComplianceStatement {
   disclaimer?: string;
 }
 
-export function postCreditDecision(
+export async function postCreditDecision(
   companyId: string,
   appliedAmount: number,
   tenorMonths: number,
-  runFresh = false,
+  _runFresh = false,
 ): Promise<CreditDecision> {
-  return getEnvelope("/v1/credit/decision", z.any(), {
+  const data = await getEnvelope("/v1/credit/decision", z.any(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       company_id: companyId,
       applied_amount: appliedAmount,
       tenor_months: tenorMonths,
-      run_fresh: runFresh,
+      skip_polish: true,
+      include_stress: false,
     }),
   });
+  // API 返回 { decision, analysis }；页面消费扁平 decision 对象
+  const decision = (data?.decision ?? data) as CreditDecision;
+  if (Array.isArray(decision.conditions)) {
+    decision.conditions = decision.conditions.map((c: any) => ({
+      ...c,
+      requirement: c.requirement ?? c.text ?? "",
+    }));
+  }
+  return decision;
 }
 
 export function getBacktestReport(): Promise<BacktestReport> {
