@@ -1,5 +1,9 @@
-/** sitemap.json — 允许小程序被搜索 */
 {
   "desc": "商舆 BizAtlas 企业风险研判小程序",
-  "rules": [{ "action": "allow", "page": "*" }]
+  "rules": [
+    {
+      "action": "allow",
+      "page": "*"
+    }
+  ]
 }
