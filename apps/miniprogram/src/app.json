@@ -6,7 +6,6 @@
     "pages/risk/analyze",
     "pages/credit/decision",
     "pages/validation/report",
-    "pages/compliance/statement",
     "pages/about/about"
   ],
   "window": {

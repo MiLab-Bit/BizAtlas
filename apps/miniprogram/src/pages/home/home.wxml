@@ -2,8 +2,8 @@
 <view class="home">
   <view class="hero">
     <view class="hero-title">商舆 BizAtlas</view>
-    <view class="hero-sub">企业经营与风险研判 Agent</view>
-    <view class="hero-tag">GOAI 2026 复赛 · AI+金融</view>
+    <view class="hero-sub">企业经营与风险研判</view>
+    <view class="hero-tag">数字可溯源 · 人在回路</view>
   </view>
 
   <view class="feature-grid">
@@ -23,6 +23,6 @@
   </view>
 
   <view class="footer" bindtap="onAbout">
-    <text>关于商舆 · 数据合规声明</text>
+    <text>关于商舆</text>
   </view>
 </view>
