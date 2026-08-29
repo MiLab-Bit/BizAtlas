@@ -57,7 +57,7 @@ function seedAgents(): AgentTrace[] {
     base("scoring", "风险评分内核", "规则匹配 + 五维加权评分 + 图谱/压力计算"),
     base("classifier", "分类 Agent", "识别行业赛道 + 路由重点核查维度"),
     base("planner", "规划 Agent", "枚举数据缺口 + 生成本地检索计划（失败感知）"),
-    base("researcher", "研究 Agent", "本地 RAG 检索补充证据（缺则显式披露，绝不编造）"),
+    base("researcher", "研究 Agent", "本地 RAG 检索补充证据（缺则显式披露，不虚构未核验证据）"),
     base("writer", "写作 Agent", "writer-only 叙事合成 + 披露透传（不改分）"),
   ];
 }

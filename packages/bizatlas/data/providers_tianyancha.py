@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from typing import Any
@@ -136,8 +137,84 @@ def search_companies(keyword: str, *, limit: int = 5) -> list[dict[str, Any]]:
     return [row for row in items[:limit] if isinstance(row, dict)]
 
 
+# ---- 近似匹配：把「腾讯控股」之类含公司结构的名称归一成品牌核心 ----
+_BRAND_SUFFIXES = [
+    "控股集团有限公司", "控股股份有限公司", "集团股份有限公司",
+    "控股有限公司", "集团有限公司", "股份有限公司", "有限责任公司",
+    "控股集团", "控股", "集团", "股份", "有限公司", "公司",
+]
+
+
+def _normalize_brand(name: str) -> str:
+    """去掉尾部公司结构后缀，得到品牌核心（腾讯控股 -> 腾讯）。"""
+    s = (name or "").strip()
+    if not s:
+        return s
+    changed = True
+    while changed and len(s) > 1:
+        changed = False
+        for suf in _BRAND_SUFFIXES:
+            if s.endswith(suf):
+                s = s[: -len(suf)]
+                changed = True
+                break
+    return s
+
+
+def _safe_search(keyword: str, limit: int = 5) -> list[dict[str, Any]]:
+    try:
+        return search_companies(keyword, limit=limit)
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _extract_base(reg: Any) -> dict[str, Any] | None:
+    if not isinstance(reg, dict):
+        return None
+    sources = reg.get("sources") if isinstance(reg.get("sources"), dict) else None
+    if sources and isinstance(sources.get("base"), dict):
+        return sources["base"]
+    if reg.get("name"):
+        return reg
+    return None
+
+
+def _safe_reg(search_key: str) -> Any:
+    try:
+        return _call_tool(
+            "get_company_registration_info",
+            {"searchKey": search_key},
+            cli=("company", "registration-info"),
+        )
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _rank_candidates(query: str, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """优先：精确同名 > 品牌核心被包含 > 内地运营主体；降权纯英文/壳主体。"""
+    q = _normalize_brand(query)
+
+    def score(c: dict[str, Any]) -> int:
+        n = str(c.get("name") or "")
+        nc = _normalize_brand(n)
+        s = 0
+        if n == query:
+            s += 200
+        if q and q in nc:
+            s += 60
+        elif q and q in n:
+            s += 50
+        if re.search(r"有限公司|有限责任公司", n):
+            s += 10
+        if re.fullmatch(r"[A-Za-z0-9\s.,()&]+", n or ""):
+            s -= 40
+        return s
+
+    return sorted(candidates, key=score, reverse=True)
+
+
 def fetch_company_profile(keyword: str) -> dict[str, Any]:
-    """经天眼查 MCP（tyc-cli / shared-core）拉取工商登记 + 失信摘要。"""
+    """经天眼查 MCP 拉取工商登记 + 失信摘要，带近似匹配与稀疏兜底。"""
     name = (keyword or "").strip()
     if not name:
         raise ValueError("企业名为空")
@@ -152,45 +229,54 @@ def fetch_company_profile(keyword: str) -> dict[str, Any]:
         "message": "",
     }
 
+    brand = _normalize_brand(name)
+    # 1) 原词搜索；2) 若归一名与原名不同，额外搜品牌核心并把结果前置（优先内地运营主体）
+    candidates = _safe_search(name)
+    if brand and brand != name:
+        candidates = _safe_search(brand) + candidates
+    # 去重（按名称）并保留顺序
+    seen: set[str] = set()
+    uniq: list[dict[str, Any]] = []
+    for c in candidates:
+        cn = c.get("name")
+        if cn and cn not in seen:
+            seen.add(cn)
+            uniq.append(c)
+    candidates = uniq
+
+    profile["candidates"] = [
+        {
+            "name": c.get("name"),
+            "creditCode": c.get("creditCode"),
+            "id": c.get("id"),
+            "regStatus": c.get("regStatus"),
+        }
+        for c in candidates
+        if c.get("name")
+    ]
+
     search_key = name
-    try:
-        candidates = search_companies(name, limit=5)
-        profile["candidates"] = [
-            {
-                "name": c.get("name"),
-                "creditCode": c.get("creditCode"),
-                "id": c.get("id"),
-                "regStatus": c.get("regStatus"),
-            }
-            for c in candidates
-            if c.get("name")
-        ]
-        if candidates:
-            pick = next((c for c in candidates if c.get("name") == name), None) or next(
-                (c for c in candidates if name in str(c.get("name") or "")),
-                candidates[0],
-            )
-            search_key = str(pick.get("name") or name)
-    except Exception as exc:  # noqa: BLE001
-        profile["message"] = f"搜索失败：{exc}"
+    base: dict[str, Any] | None = None
 
-    try:
-        reg = _call_tool(
-            "get_company_registration_info",
-            {"searchKey": search_key},
-            cli=("company", "registration-info"),
-        )
-    except Exception as exc:  # noqa: BLE001
-        profile["message"] = profile.get("message") or str(exc)
-        return profile
+    def _rich(b: dict[str, Any]) -> bool:
+        return bool((b.get("legalPersonName") or b.get("legalPerson")) and b.get("regCapital"))
 
-    base = None
-    if isinstance(reg, dict):
-        sources = reg.get("sources") if isinstance(reg.get("sources"), dict) else None
-        if sources and isinstance(sources.get("base"), dict):
-            base = sources["base"]
-        elif reg.get("name"):
-            base = reg
+    if candidates:
+        # 依次尝试排名靠前的候选，直到拿到字段较全的工商主体（稀疏兜底）
+        for cand in _rank_candidates(name, candidates)[:3]:
+            key = str(cand.get("name") or name)
+            reg = _safe_reg(key)
+            b = _extract_base(reg)
+            if b:
+                base = b
+                search_key = key
+                if _rich(b):
+                    break
+    else:
+        # 无候选：退化为直接按原名查询（保持旧行为）
+        reg = _safe_reg(name)
+        base = _extract_base(reg)
+        search_key = name
 
     if not base:
         profile["message"] = profile.get("message") or "未查到工商主体"

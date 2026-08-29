@@ -1,0 +1,241 @@
+# BizAtlas 数据授权与合规机制声明
+# 本文件是产品内合规声明的唯一数据源，由 GET /v1/compliance/statement 原样对外暴露。
+# 修改本文件即更新对外声明——避免「文档一套、产品一套」。
+
+version: 1
+updated_at: "2026-08-29"
+applicable_scenario: 贷前审批·授信准入辅助
+
+# ---------------------------------------------------------------- 合规定位
+
+positioning:
+  what_it_is: >-
+    面向持牌金融机构与产业方内部风控人员的授信辅助分析工具。
+    输出为供审批人参考的风险研判与授信建议，最终决策权与责任保留在人工审批环节。
+  what_it_is_not:
+    - 不是征信机构，不开展《征信业管理条例》《征信业务管理办法》所规范的征信业务
+    - 不对外提供、出售或公开传播企业信用评分，评分仅在授权机构内部作业中呈现
+    - 不构成放款承诺、投资建议或信用背书
+    - 不替代人工审批，ORANGE 及以上评级由系统强制转人工终审
+  boundary_note: >-
+    产品以「机构内部风控作业工具」形态交付。若后续需向机构外提供信用评价服务，
+    须先取得相应业务资质后方可开展，当前版本在产品层面不提供该能力。
+
+# ---------------------------------------------------------------- 法律依据
+
+lawful_basis:
+  - name: 《中华人民共和国数据安全法》
+    application: 数据分级分类、处理活动记录、安全保护义务
+  - name: 《中华人民共和国个人信息保护法》
+    application: 涉自然人信息（法定代表人、股东、被执行人姓名）的最小必要处理与去标识化
+  - name: 《中华人民共和国网络安全法》
+    application: 网络运行安全、日志留存
+  - name: 《征信业务管理办法》
+    application: 明确业务边界——不开展对外征信业务，仅作机构内部风控工具
+  - name: 各数据源 API 服务协议
+    application: 商业数据源的调用范围、频次、缓存与再分发限制
+
+# ---------------------------------------------------------------- 处理原则
+
+principles:
+  - id: P1
+    name: 最小必要
+    detail: 仅采集与授信风险判断直接相关的字段，不做无关信息的广泛抓取。
+  - id: P2
+    name: 来源可溯
+    detail: >-
+      每个进入评分的指标都携带 source.ref 与 tier（数据层级），
+      结论页可逐项回溯到原始出处；无法溯源的数据不进入评分。
+  - id: P3
+    name: 授权边界内使用
+    detail: 商业数据源仅在其 API 协议许可范围内调用，不转售、不再分发、不超期留存。
+  - id: P4
+    name: 未知不等于安全
+    detail: >-
+      数据缺失时标记为 UNRATED 并披露缺失项，不按有利于申请人的方向解释，
+      避免「查不到」被当作「没问题」。
+  - id: P5
+    name: 冲突不自行裁定
+    detail: 多源数据冲突时同时呈现各源取值并转人工核实，系统不自动选择采信源。
+  - id: P6
+    name: 关键数字不由模型生成
+    detail: >-
+      所有评分、比率、额度系数由确定性规则计算；大模型仅用于自然语言表述，
+      且输出需通过数字一致性校验，校验失败回退模板句。
+
+# ---------------------------------------------------------------- 数据源授权矩阵
+
+sources:
+  - id: upload
+    name: 用户上传解析
+    category: 财务/经营/文档
+    provenance: 由授信机构或申请人主动提交的材料
+    authorization: 客户书面授权 + 机构内部授信申请流程授权
+    contains_personal_info: possible
+    personal_info_handling: 文档中的自然人信息仅用于本次授信判断，不建立独立人物画像
+    usage_limit: 仅用于本次授信分析与报告生成，不用于模型训练
+    retention: 随授信档案留存，按机构档案管理制度处置
+    refresh: 按次提交
+
+  - id: cninfo
+    name: 巨潮资讯网公告
+    category: 上市公司信息披露
+    provenance: 中国证监会指定信息披露平台公开披露内容
+    authorization: 法定公开披露信息，依公开渠道获取
+    contains_personal_info: possible
+    personal_info_handling: 仅提取与主体经营风险相关内容，不额外聚合自然人信息
+    usage_limit: 遵守平台使用条款，控制调用频次，不批量镜像
+    retention: 仅缓存分析所需片段并保留原文链接
+    refresh: 按需实时调用
+
+  - id: akshare
+    name: AKShare 财务与行业数据
+    category: 财务指标/行业基准
+    provenance: 开源数据库聚合的公开市场数据
+    authorization: 开源许可 + 上游公开数据源条款
+    contains_personal_info: unlikely
+    personal_info_handling: 以主体与财务字段为主，不定向采集自然人信息
+    usage_limit: 遵守上游站点频次限制，不用于对外数据服务
+    retention: 分析结果留存，原始明细不长期堆积
+    refresh: 按需实时调用
+
+  - id: news_akshare
+    name: 新闻舆情（AKShare 通道）
+    category: 公开新闻舆情
+    provenance: 通过 AKShare 获取的公开财经新闻标题与摘要
+    authorization: 开源许可 + 上游新闻站点公开内容条款
+    contains_personal_info: possible
+    personal_info_handling: >-
+      新闻正文可能提及自然人。仅用于识别与授信主体相关的负面事件线索，
+      不对个人做画像或评价；舆情线索须经证据核验后方可进入评分。
+    usage_limit: >-
+      仅作风险线索发现，不作为独立结论依据；不镜像、不再分发新闻内容，
+      引用时保留原文出处
+    retention: 仅留存进入结论的标题与链接，不长期堆积全文
+    refresh: 按需实时调用
+
+  - id: tushare
+    name: Tushare Pro 财务
+    category: 财务指标
+    provenance: 商业数据服务商
+    authorization: 平台 Token 授权（TUSHARE_TOKEN），按积分权限调用
+    contains_personal_info: no
+    personal_info_handling: 不适用
+    usage_limit: 不得转售或再分发；超权限接口自动降级而非绕行
+    retention: 仅留存进入评分的字段与引用
+    refresh: 按需实时调用
+
+  - id: tianyancha
+    name: 天眼查
+    category: 工商登记/司法涉诉/关联关系
+    provenance: 商业数据服务商（汇集公开登记与司法公开信息）
+    authorization: 商业 API Token 授权（TIANYANCHA_TOKEN）
+    contains_personal_info: "yes"
+    personal_info_handling: >-
+      涉及法定代表人、股东、被执行人等自然人信息。仅用于识别授信主体的关联与代偿风险，
+      展示时限于风控作业必要范围，不导出为独立人物档案，不用于自动化个人决策。
+    usage_limit: 严格限定于授权机构内部风控使用，不转售、不公开传播
+    retention: 仅留存与本次结论相关的证据引用
+    refresh: 按需实时调用
+
+  - id: qichacha
+    name: 企查查
+    category: 工商登记/司法涉诉/关联关系
+    provenance: 商业数据服务商
+    authorization: 商业 API 签名授权（QICHACHA_TOKEN + QICHACHA_SECRET）
+    contains_personal_info: "yes"
+    personal_info_handling: 同天眼查口径
+    usage_limit: 当前 registry 中为关闭状态；单源策略下与天眼查择一启用，避免重复调取
+    retention: 不适用（未启用）
+    refresh: 不适用（未启用）
+    status: disabled
+
+  - id: company_json_import
+    name: 工商司法 JSON 本地导入
+    category: 工商登记/司法涉诉/关联关系
+    provenance: 由机构自行取得并放置于本地目录的数据
+    authorization: 由导入方自行承担来源合法性，产品侧不代为取得
+    contains_personal_info: possible
+    personal_info_handling: 按机构自身合规要求处理，产品仅做字段映射与引用标注
+    usage_limit: 仅本地读取，不外发
+    retention: 由机构控制
+    refresh: 按文件更新
+
+  - id: fixture
+    name: 演示案例 Fixtures
+    category: 演示数据
+    provenance: 为演示与回归测试构造的合成数据
+    authorization: 自有合成数据
+    contains_personal_info: "no"
+    personal_info_handling: 不适用
+    usage_limit: 仅用于演示与测试；界面标注为演示案例，不与真实主体混淆
+    retention: 随代码库
+    refresh: 版本发布时更新
+
+  - id: industry_static
+    name: 静态行业基准参数
+    category: 行业基准
+    provenance: 内置于 content/industry/benchmarks.yaml 的行业参考区间
+    authorization: 自有整理
+    contains_personal_info: "no"
+    personal_info_handling: 不适用
+    usage_limit: 作为对比基准，不单独作为结论依据
+    retention: 随代码库
+    refresh: 人工维护并记录版本
+
+# ---------------------------------------------------------------- 个人信息专项
+
+personal_information:
+  stance: >-
+    企业主体信息本身不属个人信息，但工商与司法数据中不可避免包含法定代表人、股东、
+    被执行人等自然人信息。产品对这部分数据采取以下约束。
+  measures:
+    - 仅在识别授信主体的控制关系、关联交易与代偿风险时使用，不构建独立自然人画像
+    - 不将自然人信息用于面向个人的自动化决策
+    - 不将自然人信息用于模型训练或跨客户复用
+    - 报告导出时按机构要求可做去标识化处理
+    - 不采集敏感个人信息（生物识别、宗教信仰、医疗健康、金融账户等）
+
+# ---------------------------------------------------------------- 留痕与可审计
+
+audit_trail:
+  evidence_chain: 每个指标携带 source.ref / tier / page，结论可逐项回溯至原始出处
+  scoring_snapshot: >-
+    每次评分固化 ScoringSnapshot（公式版本、权重、阈值），历史分数可按当时口径复算，
+    分数漂移可追查到具体口径变更
+  rule_versioning: 规则以 YAML 版本化管理，规则变更可比对
+  access_audit: 登录、鉴权、关键操作写入审计日志，可按用户与时间检索
+  human_gate: >-
+    ORANGE / RED / BLACK 评级下报告生成需人工审批放行，审批动作与审批人留痕
+  determinism: 关键数字由规则计算，同一输入可复算出同一结果，便于事后复核与争议处理
+
+# ---------------------------------------------------------------- 模型使用披露
+
+model_usage:
+  where_llm_is_used:
+    - 结论句与归因维度的自然语言表述
+    - 自然语言规则转结构化规则的草案生成（须人工确认后激活）
+    - 对话式交互的意图理解
+  where_llm_is_not_used:
+    - 风险评分与五维加权计算
+    - 评级档位判定与一票否决
+    - 授信额度系数与担保圈折减
+    - 附加条件的触发判定
+  number_gate: >-
+    大模型生成的表述须通过数字一致性校验，与规则计算结果不一致时回退到模板句，
+    并在结果中标记 gate_ok 状态
+  bring_your_own_key: 支持机构配置自有模型供应商密钥，数据不经过第三方默认通道
+
+# ---------------------------------------------------------------- 局限与免责
+
+limitations:
+  - 结论基于提交时点可得数据，数据更新后结论可能变化
+  - 公开数据存在披露滞后，尤其是非上市主体的财务与司法信息
+  - 回溯验证使用公开市场的风险事件作为代理标签，与具体机构的实际违约定义存在口径差异
+  - 演示案例为合成数据，其表现不代表真实主体上的效果
+  - 系统不保证识别全部风险，也不保证被标记的主体必然发生风险事件
+
+disclaimer: >-
+  本系统输出为授信辅助分析结果，不构成放款承诺、投资建议或信用评价服务。
+  使用方应结合自身风控政策、尽职调查与人工判断作出最终决策，
+  并对决策结果承担相应责任。系统不对因依赖输出结果产生的损失承担责任。

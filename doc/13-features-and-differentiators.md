@@ -70,7 +70,7 @@
 
 | ID | 特色 | 一句话演示 | 工程落点 |
 |---|---|---|---|
-| D1 | **数字零幻觉** | 改提示词也改不出假营收 | ADR-001 · Number Gate |
+| D1 | **数字可溯源（计算确定性）** | 改提示词也改不出假营收 | ADR-001 · Number Gate |
 | D2 | **处处可溯源** | 点风险点 → 规则 ID + 页码 | Evidence / SourceDrawer |
 | D3 | **规则可演化** | 现场 NL 加一条并命中 | content/rules · pilot/activate |
 | D4 | **五维量化 + 等级** | 雷达 + GREEN–BLACK 徽章 | packages/risk |

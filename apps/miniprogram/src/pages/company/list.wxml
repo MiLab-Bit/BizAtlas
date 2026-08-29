@@ -1,0 +1,34 @@
+<!--pages/company/list.wxml-->
+<view class="page">
+  <view class="search-bar">
+    <input
+      class="search-input"
+      placeholder="搜索企业名称"
+      value="{{keyword}}"
+      bindinput="onSearch"
+      confirm-type="search"
+    />
+  </view>
+
+  <view wx:if="{{loading}}" class="loading">加载中…</view>
+
+  <view wx:elif="{{companies.length === 0}}" class="empty">暂无企业数据</view>
+
+  <view wx:else class="company-list">
+    <view
+      wx:for="{{companies}}"
+      wx:key="id"
+      class="company-card"
+      bindtap="onTapCompany"
+      data-id="{{item.id}}"
+    >
+      <view class="company-name">{{item.name || item.id}}</view>
+      <view class="company-meta">
+        <text class="grade-chip" style="color:{{item.gradeStyle.color}};background:{{item.gradeStyle.bg}}">
+          {{item.gradeStyle.label}}
+        </text>
+        <text class="company-id">{{item.id}}</text>
+      </view>
+    </view>
+  </view>
+</view>
