@@ -26,6 +26,10 @@ class LLMUnavailable(RuntimeError):
 _request_provider: ContextVar[Optional[dict[str, Any]]] = ContextVar(
     "bizatlas_request_provider", default=None
 )
+# 快路径：强制走确定性/模板降级，跳过一切 LLM 调用（贷前 demo / SSE fast）
+_force_deterministic: ContextVar[bool] = ContextVar(
+    "bizatlas_force_deterministic", default=False
+)
 
 
 def set_request_provider(provider: Optional[dict[str, Any]]) -> None:
@@ -37,7 +41,14 @@ def get_request_provider() -> Optional[dict[str, Any]]:
     return _request_provider.get()
 
 
+def set_force_deterministic(flag: bool) -> None:
+    """开启后 llm_configured() 返回 False，全链路 Agent/润色走模板降级。"""
+    _force_deterministic.set(bool(flag))
+
+
 def llm_configured() -> bool:
+    if _force_deterministic.get():
+        return False
     s = get_settings()
     return bool(s.llm_api_base.strip() and s.llm_api_key.strip())
 

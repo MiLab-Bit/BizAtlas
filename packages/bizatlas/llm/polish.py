@@ -34,6 +34,7 @@ def polish_narrative(
         f"【模板原文（可改写语气，不可改数字）】\n{base}"
     )
     try:
+        # 短超时：润色失败即回退模板，避免拖垮 /v1/analyze（GLM 首 token 偶发极慢）
         raw = chat_completion(
             [
                 {"role": "system", "content": "你只润色叙述，不计算、不发明数字。"},
@@ -41,6 +42,7 @@ def polish_narrative(
             ],
             temperature=0.2,
             max_tokens=500,
+            timeout=12.0,
         )
     except LLMUnavailable:
         return {"text": base, "polished": False, "llm_used": False, "gate_ok": True}

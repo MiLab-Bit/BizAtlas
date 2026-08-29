@@ -32,6 +32,9 @@ htmlcov/
 # Secrets (keep .env.example tracked, ignore real .env)
 .env
 .env.*
+apps/miniprogram/private*.key
+*.wx*.key
+private.*.key
 
 # Frontend (Vite/React build artifacts & deps)
 node_modules/

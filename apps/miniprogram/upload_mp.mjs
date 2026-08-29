@@ -20,8 +20,8 @@ const project = new ci.Project({
   ignores: ['node_modules/**/*'],
 })
 
-const VERSION = '1.0.0'
-const DESC = '商舆 BizAtlas v1.0 — 企业经营与风险研判 Agent（GOAI 2026 复赛）：贷前审批/风险分析/验证报告/数据合规'
+const VERSION = '1.0.1'
+const DESC = '商舆 BizAtlas v1.0.1 — 贷前快路径/SSE/连续亏损代理预警/合规启动对账'
 
 async function main() {
   try {
