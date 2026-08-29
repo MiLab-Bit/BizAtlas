@@ -1,0 +1,54 @@
+{
+  "pages": [
+    "pages/home/home",
+    "pages/company/list",
+    "pages/company/detail",
+    "pages/risk/analyze",
+    "pages/credit/decision",
+    "pages/validation/report",
+    "pages/compliance/statement",
+    "pages/about/about"
+  ],
+  "window": {
+    "backgroundTextStyle": "dark",
+    "navigationBarBackgroundColor": "#0F172A",
+    "navigationBarTitleText": "商舆 BizAtlas",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#F8FAFC"
+  },
+  "tabBar": {
+    "color": "#94A3B8",
+    "selectedColor": "#2563EB",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/home/home",
+        "text": "首页",
+        "iconPath": "assets/tab-home.png",
+        "selectedIconPath": "assets/tab-home-active.png"
+      },
+      {
+        "pagePath": "pages/company/list",
+        "text": "企业",
+        "iconPath": "assets/tab-company.png",
+        "selectedIconPath": "assets/tab-company-active.png"
+      },
+      {
+        "pagePath": "pages/credit/decision",
+        "text": "审批",
+        "iconPath": "assets/tab-credit.png",
+        "selectedIconPath": "assets/tab-credit-active.png"
+      },
+      {
+        "pagePath": "pages/validation/report",
+        "text": "验证",
+        "iconPath": "assets/tab-validation.png",
+        "selectedIconPath": "assets/tab-validation-active.png"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

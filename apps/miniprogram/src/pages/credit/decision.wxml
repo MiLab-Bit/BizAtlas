@@ -1,0 +1,66 @@
+<!--pages/credit/decision.wxml—贷前审批决策卡-->
+<view class="page">
+  <view class="card form-card">
+    <view class="card-title">贷前审批决策</view>
+
+    <view class="field">
+      <text class="field-label">企业（演示案例）</text>
+      <picker mode="selector" range="{{fixtures}}" range-key="label" bindchange="onCompanyId" value="0">
+        <view class="picker-value">{{fixtures[0].label}}</view>
+      </picker>
+    </view>
+
+    <view class="field">
+      <text class="field-label">申请金额（万元）</text>
+      <input class="input" type="digit" value="{{form.appliedAmount}}" bindinput="onAmount" />
+    </view>
+
+    <view class="field">
+      <text class="field-label">期限（月）</text>
+      <input class="input" type="number" value="{{form.tenorMonths}}" bindinput="onTenor" />
+    </view>
+
+    <button class="btn-submit" bindtap="onSubmit" loading="{{loading}}" disabled="{{loading}}">
+      生成审批决策
+    </button>
+  </view>
+
+  <view wx:if="{{result}}" class="card result-card">
+    <view class="decision-banner" style="color:{{result.decisionColor}};background:{{result.decisionBg}}">
+      {{result.decisionLabel}}
+    </view>
+
+    <view class="stat-grid">
+      <view class="stat">
+        <text class="stat-label">建议额度</text>
+        <text class="stat-value">{{result.suggested_limit_min || '—'}} ~ {{result.suggested_limit_max || '—'}} 万</text>
+      </view>
+      <view class="stat">
+        <text class="stat-label">人工闸门</text>
+        <text class="stat-value {{result.manual_gate ? 'warn' : 'ok'}}">{{result.manual_gate ? '需复核' : '可免复核'}}</text>
+      </view>
+      <view class="stat">
+        <text class="stat-label">担保链层级</text>
+        <text class="stat-value">{{result.guarantee_contagion.chain_depth || '—'}}</text>
+      </view>
+      <view class="stat">
+        <text class="stat-label">数据完整度</text>
+        <text class="stat-value">{{result.data_completeness.core_score || '—'}}/{{result.data_completeness.core_total || '—'}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{result.reasons && result.reasons.length}}" class="section">
+      <view class="section-title">研判依据</view>
+      <view wx:for="{{result.reasons}}" wx:key="*this" class="list-item">• {{item}}</view>
+    </view>
+
+    <view wx:if="{{result.conditions && result.conditions.length}}" class="section">
+      <view class="section-title">附加条件</view>
+      <view wx:for="{{result.conditions}}" wx:key="*this" class="list-item">• {{item}}</view>
+    </view>
+  </view>
+
+  <view class="disclosure">
+    本决策为 Agent 辅助研判，不替代人工审批。ORANGE 及以上风险等级强制人工复核。
+  </view>
+</view>

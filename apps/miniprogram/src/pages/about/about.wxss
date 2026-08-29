@@ -1,0 +1,10 @@
+.page{padding:24rpx;}
+.card{background:#fff;border-radius:20rpx;padding:28rpx;margin-bottom:20rpx;border:1rpx solid #E2E8F0;}
+.title{font-size:40rpx;font-weight:700;color:#0F172A;}
+.sub{font-size:26rpx;color:#64748B;margin-top:8rpx;}
+.tag{display:inline-block;margin-top:16rpx;padding:6rpx 16rpx;background:#EFF6FF;color:#2563EB;border-radius:999rpx;font-size:22rpx;}
+.card-title{font-size:30rpx;font-weight:600;color:#0F172A;margin-bottom:12rpx;}
+.para{font-size:26rpx;color:#334155;line-height:1.7;margin-top:8rpx;}
+.hl{color:#2563EB;font-weight:600;}
+.list{font-size:26rpx;color:#475569;line-height:1.8;padding:4rpx 0;}
+.footer{text-align:center;color:#94A3B8;font-size:22rpx;padding:24rpx 0;}

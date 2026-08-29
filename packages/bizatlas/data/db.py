@@ -141,6 +141,22 @@ CREATE TABLE IF NOT EXISTS evidence (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(company_id) REFERENCES companies(id)
 );
+
+CREATE TABLE IF NOT EXISTS model_providers (
+  id TEXT PRIMARY KEY,
+  owner_id TEXT NOT NULL,
+  slot TEXT NOT NULL DEFAULT 'text',
+  name TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  api_key_enc TEXT NOT NULL,
+  base_url TEXT,
+  model TEXT,
+  status TEXT NOT NULL DEFAULT 'unverified',
+  last_error TEXT,
+  last_tested_at TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
@@ -180,6 +196,11 @@ def init_db(db_path: str | None = None) -> Path:
         # 新增列用 ALTER 补（列已存在时静默跳过）。
         try:
             conn.execute("ALTER TABLE financial_metrics ADD COLUMN evidence_refs TEXT")
+        except sqlite3.OperationalError:
+            pass
+        # 双模型槽位：已存在的 model_providers 表补齐 slot 列（默认 'text'）
+        try:
+            conn.execute("ALTER TABLE model_providers ADD COLUMN slot TEXT NOT NULL DEFAULT 'text'")
         except sqlite3.OperationalError:
             pass
         conn.commit()

@@ -207,8 +207,13 @@ def compile_rule_from_nl(text: str) -> dict[str, Any]:
     if not raw:
         raise ValueError("规则描述为空")
 
-    # 有 LLM：只走模型编写，不再用原来的正则编译冒充
+    # 有 LLM：优先走模型编写；若 LLM 未返回合法规则 JSON，降级到正则编译，
+    # 覆盖「商誉占比超 25%」「流动比率小于 0.9」等简单阈值句式，
+    # 保证核心「自然语言→规则」链路在模型波动时仍可用（演示更稳）。
     if llm_configured():
-        return _compile_llm(raw)
+        try:
+            return _compile_llm(raw)
+        except ValueError:
+            return _compile_regex(raw)
 
     return _compile_regex(raw)
