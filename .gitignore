@@ -33,6 +33,11 @@ htmlcov/
 .env
 .env.*
 
+# WeChat mini-program private keys
+apps/miniprogram/private*.key
+*.wx*.key
+private.*.key
+
 # Frontend (Vite/React build artifacts & deps)
 node_modules/
 dist/
@@ -40,35 +45,49 @@ apps/web/dist/
 *.tsbuildinfo
 .vite/
 
-# Local secrets / credentials — added 2026-08-27 git bootstrap (do NOT commit)
-cfd_creds.json
+# ---------------------------------------------------------------------------
+# 本地密钥 / 凭据（2026-08-27 起显式忽略，绝不入库）
+# ---------------------------------------------------------------------------
 .cf_token
+cfd_creds.json
 config.yml
-backups/
+tunnel_token
 
 # ---------------------------------------------------------------------------
-# 手工备份文件（*.bakYYYYMMDD* 等）：内容已由 git 历史覆盖，不入库
+# 手工备份 / 临时产物（内容已由 git 历史覆盖，不入库）
 # ---------------------------------------------------------------------------
 *.bak
 *.bak[0-9]*
 *.bak[0-9]*[a-z]
 *.orig
 *.rej
+backups/
 
 # ---------------------------------------------------------------------------
-# 运行/调试日志与一次性脚本产物（backtest、前端构建日志等）
+# 部署辅助脚本（含 Cloudflare 账号/区域 ID，不入库）
 # ---------------------------------------------------------------------------
-*.log
-*.jsonl
+notify_backend.sh
+
+# ---------------------------------------------------------------------------
+# 旧前端构建残留
+# ---------------------------------------------------------------------------
+apps/web/dist_mv_old/
+
+# ---------------------------------------------------------------------------
+# 回溯 / 测试运行产物（不应入库）
+# ---------------------------------------------------------------------------
+backtest_out.txt
+pytest_out.txt
+backtest_report.json
+backtest_report_metrics_v4.md
+
+# ---------------------------------------------------------------------------
+# 构建 / 回溯运行日志与临时产物
+# ---------------------------------------------------------------------------
+backtest*.log
+*backtest_progress*.jsonl
 fe_*.log
-vite_*.log
-/backtest_run.py
-/scripts/backtest_run.py.local
-exports/*.jsonl
-
-# ---------------------------------------------------------------------------
-# pnpm 本地配置：.npmrc 含 dangerously-allow-all-builds=true，
-# 属本机放行开关，不入仓库；正式放行走 package.json 的 pnpm.allowBuilds
-# ---------------------------------------------------------------------------
+vite_dbg.log
 apps/web/.npmrc
-apps/web/pnpm-workspace.yaml
+
+vite_*.log
