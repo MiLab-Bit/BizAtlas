@@ -1,0 +1,14 @@
+{
+  "nodes": [
+    { "id": "n0", "name": "盛达商贸控股", "category": "主体", "risk": "high" },
+    { "id": "n1", "name": "盛达物流", "category": "担保", "risk": "warn" },
+    { "id": "n2", "name": "盛达小贷", "category": "担保", "risk": "high" },
+    { "id": "n3", "name": "关联贸易公司（失信）", "category": "担保", "risk": "high" }
+  ],
+  "edges": [
+    { "source": "n0", "target": "n1", "rel": "担保" },
+    { "source": "n0", "target": "n2", "rel": "担保" },
+    { "source": "n2", "target": "n3", "rel": "担保" }
+  ],
+  "note": "违约样本担保/失信关联示意"
+}
