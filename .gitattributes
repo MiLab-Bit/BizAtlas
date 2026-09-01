@@ -1,0 +1,38 @@
+# 统一换行符为 LF：本仓库历史上被 Windows 侧编辑污染过（2026-08-29 事件），
+# 导致 tools/ 等包出现「整文件重写但内容不变」的假 diff。
+* text=auto eol=lf
+
+# 明确声明为文本的扩展名
+*.py   text eol=lf
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.js   text eol=lf
+*.jsx  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.toml text eol=lf
+*.ini  text eol=lf
+*.cfg  text eol=lf
+*.sh   text eol=lf
+*.sql  text eol=lf
+*.html text eol=lf
+*.css  text eol=lf
+
+# 二进制：禁止任何换行符转换
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.svgz binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.eot  binary
+*.pdf  binary
+*.zip  binary
+*.gz   binary
+*.xlsx binary
+*.docx binary
