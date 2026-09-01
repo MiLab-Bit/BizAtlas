@@ -1,5 +1,5 @@
 {
-  "scoring_version": "1.0.0",
+  "scoring_version": "1.1.0",
   "fixtures": {
     "healthy": {
       "grade": "GREEN",
@@ -13,8 +13,8 @@
       }
     },
     "risky": {
-      "grade": "RED",
-      "score": 78.2,
+      "grade": "BLACK",
+      "score": 96.2,
       "dimensions": {
         "财务": 100.0,
         "经营": 74.0,
@@ -34,5 +34,6 @@
         "关联": 100.0
       }
     }
-  }
+  },
+  "_rebaseline_note": "v1.1.0 定版：risky 因 R1011/R1012 + early_warning 抬分政策由 RED(78.2) 升为 BLACK(96.2)。该 fixture 同时具备 重大诉讼/行政处罚/连续两年扣非净利为负/股权质押率 0.72/担保链层级 4，属重度困境主体，BLACK 与审批直觉一致。healthy/defaulted 零漂移。定版依据见 tests/test_golden_regression.py 的精确回归断言。"
 }
