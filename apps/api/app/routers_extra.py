@@ -77,3 +77,9 @@ def company_contagion(company_id: str, fixture_id: Optional[str] = None) -> Enve
         fid = company_id
     data = compute_contagion(company_id, fixture_id=fid)
     return Envelope(ok=True, data=data, meta={"degraded": False})
+
+
+@router.get("/v1/analytics/feedback/dashboard")
+def analytics_feedback_dashboard() -> Envelope[dict]:
+    """效果度量看板（RaaS/采纳率前置）：聚合反馈事件的决策分布、采纳率与近期事件。"""
+    return Envelope(ok=True, data=feedback_svc.feedback_dashboard())

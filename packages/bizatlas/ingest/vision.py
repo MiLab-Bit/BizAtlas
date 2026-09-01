@@ -160,3 +160,114 @@ def run_vision_pipeline(pdf_path: str | Path, source_ref: str) -> VisionResult:
             verified=False,
             note=f"视觉抽取失败，降级纯文本：{exc}",
         )
+
+
+# ---- 多模态票据 OCR（P2）----
+# 真实 VLM 调用：把发票/单据图片 base64 后发给 OpenAI 兼容 chat/completions，
+# 要求模型返回结构化 JSON 票面字段。未配置视觉/LLM 时显式降级；解析失败绝不编造。
+_INVOICE_PROMPT = (
+    "你是票据结构化抽取器。请仔细识别这张发票/单据图片，"
+    "只输出一个 JSON 对象，字段包括："
+    "invoice_type(发票类型), invoice_code(发票代码), invoice_no(发票号码),"
+    "date(开票日期,YYYY-MM-DD), seller_name(销售方名称), seller_tax_no(销售方税号),"
+    "buyer_name(购买方名称), buyer_tax_no(购买方税号),"
+    "amount(价税合计金额,number), tax(税额,number),"
+    "items(明细数组,每项{name,qty,amount}), confidence(0-1,识别把握)。"
+    "金额必须来自票面，不要估算；看不清的字段填 null。只输出 JSON，不要解释。"
+)
+
+
+def vision_ocr_available() -> bool:
+    """票据 OCR 是否可用：vision 或 LLM 任一配置了 api_key + base 即可。"""
+    s = get_settings()
+    key = (s.vision_api_key or s.llm_api_key).strip()
+    base = (s.vision_api_base or s.llm_api_base).strip()
+    return bool(key and base)
+
+
+def _encode_image(path: str) -> tuple[str, str]:
+    import base64
+    import mimetypes
+
+    from pathlib import Path
+
+    p = Path(path)
+    mime = mimetypes.guess_type(p.name)[0] or "image/png"
+    data = base64.b64encode(p.read_bytes()).decode("ascii")
+    return mime, data
+
+
+def _extract_json(text: str):
+    import json
+
+    if not text:
+        return None
+    t = text.strip()
+    if t.startswith("```"):
+        t = t.strip("`")
+        if t.lower().startswith("json"):
+            t = t[4:]
+        idx = t.find("```")
+        if idx != -1:
+            t = t[:idx]
+        t = t.strip()
+    try:
+        return json.loads(t)
+    except json.JSONDecodeError:
+        s, e = t.find("{"), t.rfind("}")
+        if s != -1 and e != -1 and e > s:
+            try:
+                return json.loads(t[s : e + 1])
+            except json.JSONDecodeError:
+                return None
+        return None
+
+
+def vision_ocr_image(file_path: str, prompt: str | None = None, timeout: float = 60.0) -> dict:
+    """调用多模态 LLM 抽取发票结构化字段。
+
+    Returns: {ok, message, fields, raw}
+        - ok=False：未配置或调用/解析失败，fields=None，绝不编造票面数字。
+    """
+    out: dict = {"ok": False, "message": "", "fields": None, "raw": None}
+    if not vision_ocr_available():
+        out["message"] = "视觉后端未配置（vision_api_key 与 llm_api_key 均为空），票据 OCR 降级"
+        return out
+    import httpx
+
+    try:
+        s = get_settings()
+        base = (s.vision_api_base or s.llm_api_base).strip().rstrip("/")
+        key = (s.vision_api_key or s.llm_api_key).strip()
+        model = (s.vision_model or s.llm_model).strip()
+        mime, data = _encode_image(file_path)
+        resp = httpx.post(
+            f"{base}/chat/completions",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": prompt or _INVOICE_PROMPT},
+                    {"role": "user", "content": [
+                        {"type": "text", "text": "请抽取这张发票/单据："},
+                        {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}},
+                    ]},
+                ],
+                "temperature": 0,
+            },
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"]
+        out["raw"] = content
+        fields = _extract_json(content)
+        if fields is None:
+            out["message"] = "VLM 未返回可解析 JSON，已保留原始文本"
+            return out
+        out["ok"] = True
+        out["fields"] = fields
+        out["message"] = "VLM 抽取成功"
+        return out
+    except Exception as exc:  # noqa: BLE001
+        out["message"] = f"视觉后端调用失败：{exc}"
+        return out
