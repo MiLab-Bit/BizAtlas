@@ -162,7 +162,8 @@ git checkout -- <file>    # 丢弃单文件改动
 - [ ] `git log` 近期提交链已知（CI 绿基线 = `bfcbbe8`）
 - [ ] `POST /v1/analyze` fixture 链路已实跑通过（healthy/risky/defaulted）
 - [x] 微信小程序 v1.0.1 已上传（私钥就位，`node upload_mp.mjs` 成功）
-- [ ] MP 后台 `request` 合法域名白名单 `sy-realm.ltd` 已配（运行时前置，否则 `wx.request` 不通）
+- [x] MP 后台 `request` 合法域名白名单 `sy-realm.ltd` 已配（运行时前置，否则 `wx.request` 不通）
+- [x] 域名核验（2026-09-01）：`sy-realm.ltd` 解析到 Cloudflare、证书有效（至 2026-11-24）、`/v1/health` 返回 200 → 小程序生产环境可调通
 
 ---
 
