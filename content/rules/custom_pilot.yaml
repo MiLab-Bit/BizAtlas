@@ -787,3 +787,19 @@ rules:
   source: nl_compiler_offline
   version: pilot
   nl_text: 流动比率小于 0.9 高风险
+- id: P3869925
+  name: 离线编译：流动比率
+  dimension: 财务
+  severity: 高
+  status: pilot
+  contribute_to_score: false
+  condition:
+    type: threshold
+    metric: 流动比率
+    op: <
+    value: 0.9
+  message: 流动比率小于 0.9 高风险
+  explain: 当「流动比率」满足 < 0.9 时触发（pilot，确认后计分）。
+  source: nl_compiler_offline
+  version: pilot
+  nl_text: 流动比率小于 0.9 高风险
