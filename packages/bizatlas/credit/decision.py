@@ -326,6 +326,22 @@ def _build_conditions(
 # ---------------------------------------------------------------- 主入口
 
 
+def _attach_calibration(analyze_result: dict[str, Any], applied_amount: float | None) -> dict[str, Any]:
+    """把启发式研判结果做 PD/LGD/EAD/EL 校准（见 bizatlas.risk.calibration）。"""
+    from bizatlas.risk.calibration import calibrate
+
+    risk = analyze_result.get("risk") or {}
+    cal = calibrate(risk, applied_amount=applied_amount)
+    return {
+        "pd": cal.pd,
+        "lgd": cal.lgd,
+        "ead": cal.ead,
+        "expected_loss": cal.expected_loss,
+        "calibrated_grade": cal.calibrated_grade,
+        "rationale": cal.rationale,
+    }
+
+
 def build_credit_decision(
     analyze_result: dict[str, Any],
     *,
@@ -489,6 +505,7 @@ def build_credit_decision(
         "conflicts": conflicts,
         "evidence_refs": list(risk.get("evidence_refs") or []),
         "citations": list(analyze_result.get("citations") or []),
+        "calibration": _attach_calibration(analyze_result, applied_amount),
         "scoring_snapshot": risk.get("scoring") or {},
         "determinism": {
             "llm_used": False,

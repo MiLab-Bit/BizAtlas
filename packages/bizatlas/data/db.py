@@ -157,6 +157,20 @@ CREATE TABLE IF NOT EXISTS model_providers (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS feedback_events (
+  id TEXT PRIMARY KEY,
+  report_id TEXT,
+  company_id TEXT,
+  analyst TEXT,
+  action TEXT NOT NULL,
+  decision TEXT,
+  comment TEXT,
+  latency_ms REAL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+
 """
 
 

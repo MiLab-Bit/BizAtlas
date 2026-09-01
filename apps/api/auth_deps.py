@@ -14,7 +14,7 @@ from typing import Optional
 
 import hashlib
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Request
 
 from bizatlas.auth.rbac import (
     Action,
@@ -29,10 +29,12 @@ from bizatlas.config import get_settings
 from bizatlas.identity import apikeys as _apikeys
 
 
-def get_principal(authorization: Optional[str] = Header(default=None)) -> Principal:
+def get_principal(request: Request, authorization: Optional[str] = Header(default=None)) -> Principal:
     settings = get_settings()
     if settings.bizatlas_auth_disabled or not settings.bizatlas_auth_secret:
-        return anonymous_admin()
+        principal = anonymous_admin()
+        request.state.principal = principal
+        return principal
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     token = authorization[len("Bearer ") :].strip()
@@ -42,10 +44,13 @@ def get_principal(authorization: Optional[str] = Header(default=None)) -> Princi
         _apikeys.touch_api_key(rec["id"])
         owner = _apikeys.principal_for_owner(rec["owner_id"])
         if owner:
+            request.state.principal = owner
             return owner
     # 2) 人工 JWT
     try:
-        return verify_token(token, settings.bizatlas_auth_secret)
+        principal = verify_token(token, settings.bizatlas_auth_secret)
+        request.state.principal = principal
+        return principal
     except TokenInvalid as exc:
         raise HTTPException(status_code=401, detail=str(exc))
 

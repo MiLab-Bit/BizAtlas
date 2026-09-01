@@ -1,30 +1,25 @@
-# BizAtlas / 商舆 · 阶段 3 部署镜像
-# 单阶段：python:3.12-slim + 源码可编辑安装；生产可改为多阶段以减小体积。
-FROM python:3.12-slim
-
-WORKDIR /app
+# BizAtlas 私有化部署镜像（P0-② 最小合规 · 数据不出域）
+FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    BIZATLAS_ENV=prod \
-    BIZATLAS_MODE=snapshot \
-    API_HOST=0.0.0.0 \
-    API_PORT=8000
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /opt/bizatlas
 
 # 先装依赖（利用层缓存）
-COPY requirements.txt ./
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# 再拷源码并安装（editable，保证 bizatlas / apps 均可导入）
-COPY . /app
-RUN pip install --no-cache-dir -e .
+# 再拷代码
+COPY . .
+
+# 密钥与运行时配置通过 .env（gitignore）注入，不进镜像
+RUN mkdir -p uploads exports data content/fixtures
+
+# 鉴权默认开启；privatize.sh 会生成 BIZATLAS_AUTH_SECRET 与 BOOTSTRAP_TOKEN
+ENV BIZATLAS_AUTH_DISABLED=false
 
 EXPOSE 8000
 
-# 高可用：liveness 探针（进程存活即 200）
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/v1/health/live').status==200 else 1)"
-
-# 启动 API（容器内由 launcher 读取配置并注册受治理工具）
-CMD ["python", "-m", "apps.api.launcher"]
+CMD ["uvicorn", "apps.api.launcher:app", "--host", "0.0.0.0", "--port", "8000"]

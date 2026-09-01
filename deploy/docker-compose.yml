@@ -1,42 +1,26 @@
-# BizAtlas / 商舆 · 阶段 3 编排
-# 高可用要点：restart=unless-stopped（进程退出自动拉起）、健康检查、状态卷持久化。
-# 扩副本：前置 LB + 无状态 API（评分内核确定性、DB 走外部 PG 时即可水平扩展）。
+# BizAtlas 私有化一键部署（P0-② 最小合规）
+# 用法：
+#   cp .env.example .env && 编辑填密钥
+#   ./privatize.sh            # 生成 AUTH_SECRET/BOOTSTRAP_TOKEN（若未设）
+#   docker compose up -d
 services:
   bizatlas:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
-    image: bizatlas:0.3.0
+    build: .
     container_name: bizatlas
     restart: unless-stopped
-    ports:
-      - "8000:8000"
-    environment:
-      - BIZATLAS_ENV=prod
-      - BIZATLAS_MODE=snapshot
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      # —— 生产部署：关闭开发态放行，设密钥并下发 HMAC 令牌 ——
-      - BIZATLAS_AUTH_DISABLED=false
-      - BIZATLAS_AUTH_SECRET=${BIZATLAS_AUTH_SECRET:-change-me-in-prod}
     env_file:
-      - ../.env
+      - .env
+    environment:
+      # 私有化默认开启鉴权（最小权限）
+      BIZATLAS_AUTH_DISABLED: "false"
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:8000:8000"
     volumes:
-      - bizatlas-data:/app/data
-      - bizatlas-uploads:/app/uploads
-      - bizatlas-exports:/app/exports
+      - ./data:/opt/bizatlas/data
+      - ./uploads:/opt/bizatlas/uploads
+      - ./exports:/opt/bizatlas/exports
     healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/v1/health/live').status==200 else 1)"
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/v1/healthz').status==200 else 1)"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 20s
-
-volumes:
-  bizatlas-data:
-  bizatlas-uploads:
-  bizatlas-exports:

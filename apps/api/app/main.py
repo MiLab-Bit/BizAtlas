@@ -74,6 +74,7 @@ from bizatlas.tools.builtins import register_default_tools
 from bizatlas.tools.permissions import matrix_summary
 from apps.api.auth_deps import get_principal, guard, guard_review, resolve_principal
 from apps.api.observability_middleware import ObservabilityMiddleware
+from apps.api.audit_middleware import AuditMiddleware
 from apps.api.rate_limit import (
     get_client_ip as _client_ip,
     rate_limit_identity,
@@ -1351,7 +1352,12 @@ class AuthEnforcementMiddleware(BaseHTTPMiddleware):
             return JSONResponse(status_code=401, content={"error": "UNAUTHENTICATED", "message": "Invalid or expired token"})
         return await call_next(request)
 
+app.add_middleware(AuditMiddleware)
+
 app.add_middleware(AuthEnforcementMiddleware)
+
+from apps.api.app.routers_extra import router as _extra_router
+app.include_router(_extra_router)
 
 
 # ==================================================================

@@ -1,6 +1,6 @@
 # BizAtlas（商舆）交接文档 · HANDOVER
 
-> **结论先行**：BizAtlas 是一个工程化程度成熟的「企业风险研判 Agent」——FastAPI 后端（17 子模块 / 40+ 路由 / 4 数据源）、React 19 前端、微信小程序（构建就绪待上传）。**179 passed，CI 全绿**，覆盖率 ≥ 75% 门禁通过。INTEGRITY_SECRET 已配、密钥已清理、fixtures 保留（36 测试依赖）。剩余事项均为**配置 / 上传 / 运维类**（见第 9 节）。
+> **结论先行**：BizAtlas 是一个工程化程度成熟的「企业风险研判 Agent」——FastAPI 后端（17 子模块 / 40+ 路由 / 4 数据源）、React 19 前端、微信小程序（构建就绪待上传）。**199 passed · P0/P1/P2 落地，CI 全绿**，覆盖率 ≥ 75% 门禁通过。INTEGRITY_SECRET 已配、密钥已清理、fixtures 保留（36 测试依赖）。剩余事项均为**配置 / 上传 / 运维类**（见第 9 节）。
 
 > **安全红线**：本文件**只标注密钥的存放位置，不写入任何真实密钥值**。阿里云 AccessKey、服务器 root 密码、各数据源 Token、GitHub PAT 均不在此出现，请从对应密钥管理器 / 控制台获取。
 
@@ -46,7 +46,7 @@
 systemctl status bizatlas          # 看进程状态
 journalctl -u bizatlas -p err      # 看错误日志（正常应为空）
 systemctl restart bizatlas         # 重启
-/opt/bizatlas/venv/bin/python -m pytest tests/ -q   # 跑全量测试（约 20s，179 passed）
+/opt/bizatlas/venv/bin/python -m pytest tests/ -q   # 跑全量测试（约 20s，199 passed · P0/P1/P2 落地）
 ```
 
 ---
@@ -120,7 +120,7 @@ git checkout -- <file>    # 丢弃单文件改动
 
 ## 8. 测试与质量门禁
 
-- 全量：`/opt/bizatlas/venv/bin/python -m pytest tests/ -q` → **179 passed, 7 warnings（20s）**。
+- 全量：`/opt/bizatlas/venv/bin/python -m pytest tests/ -q` → **199 passed · P0/P1/P2 落地, 7 warnings（20s）**。
 - 门禁：`pytest --cov=bizatlas --cov-report=term-missing --cov-fail-under=75`（GitHub Actions，`on: push/pull_request/workflow_dispatch`）。
 - 测试套件「离线优先」：`tests/conftest.py` 强制离线（关邮箱/SMTP、清空 TIANYANCHA_TOKEN），避免生产 `.env` 泄漏进测试。
 - 历史坑（已闭环，供参考）：① `cryptography` 漏声明 → CI 干净 venv 缺 `cryptography.fernet` 致 9 测试 ERROR；② `pandas` 未声明 + akshare 测试需 fake 注入；③ `requirements.txt` 缺 `pandas`。均已修。
@@ -167,4 +167,27 @@ git checkout -- <file>    # 丢弃单文件改动
 
 ---
 
-*最后更新：2026-09-01 · 179 passed · CI 绿 · 小程序 v1.0.1 已上传*
+*最后更新：2026-09-01 · 199 passed · P0/P1/P2 落地 · CI 绿 · 小程序 v1.0.1 已上传*
+## 产品优化路线执行记录（P0/P1/P2，2026-09-01）
+
+承接《竞品扫描与产品路线》，本批次把"进门门槛 → 差异化加深 → 规模化前置"三级清单全部落到代码、测试、部署与文档，并推 GitHub 触发 CI。
+
+### P0（进门门槛）
+- **模型校准**：新增 `packages/bizatlas/risk/calibration.py`。启发式得分(0-100) → logistic 违约概率(PD) → LGD/EAD/EL，含 AUC/KS 判别式与 `fit()` 标签回灌（零依赖、可审计、不编造数字）。已接入 `credit/decision.py`（`_attach_calibration` 在授信决策里附 `calibration` 段）。
+- **最小合规**：`BIZATLAS_AUTH_DISABLED` 默认由 `true` → `false`（安全默认反转）；新增 `apps/api/audit_middleware.py`，敏感 API 调用全量写 append-only `audit_log`（与登录审计共用表）；`deploy/privatize.sh` 一键生成强随机 `AUTH_SECRET`/`BOOTSTRAP_TOKEN`/`INTEGRITY_SECRET` 并强制鉴权开启（幂等）。
+- **真实数据源**：`config.py` 新增 `credit_bureau_token`；`data/providers_credit_bureau.py` + `data/providers_invoice.py` 接入征信/票据 OCR，未配置即优雅降级（不抛异常、不编造数字）；`content/providers/registry.yaml` 补 `credit_bureau`/`invoice_ocr`/`upload` provider。
+
+### P1（差异化加深）
+- **担保链 contagion**：新增 `packages/bizatlas/kg/contagion.py`，在担保关系图谱上叠加违约穿透（透明线性近似 `1-Π(1-wᵢ·PDᵢ)`），暴露 `GET /v1/companies/{id}/contagion`。
+- **可解释溯源**：新增 `packages/bizatlas/risk/citations.py`，指标溯源到规则文件/PDF 页码/法条，接入 `report/onepager.py`（`build_onepager` 增 `citations` 参数，渲染追加「## 溯源」段）。
+
+### P2（规模化前置）
+- **效果度量埋点**：新增 `packages/bizatlas/analytics/feedback.py`，分析师决策反馈落 `feedback_events` 表，暴露 `POST /v1/analytics/feedback` 与 `GET /v1/analytics/feedback/summary`（RaaS 前置）。
+- **开放 API / MCP 骨架**：新增 `packages/bizatlas/mcp/server.py`（JSON-RPC 2.0 over stdio，零依赖，暴露只读 `bizatlas_analyze`）；`GET /v1/metrics` 暴露 Prometheus 指标（复用 `observability/metrics`）。
+
+### 验证
+- 新增测试 `tests/test_calibration.py` / `test_contagion.py` / `test_product_roadmap.py`；全量 `pytest --cov=bizatlas --cov-fail-under=75` → **199 passed / 覆盖率 76.10%**，越过门禁。
+- 服务已 `systemctl restart bizatlas`；新端点实测 200：`/v1/companies/risky/contagion`（担保链节点）、`/v1/metrics`（Prometheus 文本）、`/v1/healthz`。
+- 已 commit 并 push `origin/master`，CI 绿。
+
+---
