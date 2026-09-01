@@ -1,3 +1,15 @@
+import sys
+import types
+
+# 注入轻量 fake akshare：akshare 为可选重型依赖（体积大，CI 不安装）。
+# 本测试仅验证「接口→数据」映射与截断逻辑，用 mock 即可，无需真实包。
+_fake_ak = types.ModuleType("akshare")
+_fake_ak.stock_news_em = lambda *a, **k: None
+sys.modules.setdefault("akshare", _fake_ak)
+
+import pytest
+
+pytest.importorskip("pandas")
 import pandas as pd
 from unittest.mock import patch
 
