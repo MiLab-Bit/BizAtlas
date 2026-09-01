@@ -92,6 +92,14 @@ async def lifespan(app: FastAPI):
     # 阶段 3：启动初始化（替代已废弃的 @app.on_event("startup")）
     init_db()
     register_default_tools()
+    # Phase C：.env → platform LLM seed + 合规对账自检（缺口只告警）
+    try:
+        from bizatlas.bootstrap import run_startup_bootstrap
+
+        boot = run_startup_bootstrap()
+        app.state.bootstrap = boot
+    except Exception as exc:  # noqa: BLE001
+        app.state.bootstrap = {"error": str(exc)}
     yield
 
 
@@ -342,19 +350,29 @@ def analyze_pipeline(req: AnalyzeRequest) -> Envelope[dict]:
 
 
 @app.get("/v1/analyze/pipeline/stream")
-def analyze_pipeline_stream(company_id: str, task: str = "analyze_risk"):
+def analyze_pipeline_stream(
+    company_id: str,
+    task: str = "analyze_risk",
+    fast: bool = False,
+):
     """多 Agent 管线实时流（SSE）：逐步推送 Agent 状态/事件，结束时附完整 trace。
 
     前端用 EventSource 订阅（GET，便于经 vite 代理同源）。开发态鉴权关闭，无需令牌。
     P1-4：用后台线程驱动管线、队列取事件，空闲 15s 发送 SSE 注释心跳 ": ping"，
     防止 nginx/cloudflared 等长连接因空闲被中间层掐断。
+
+    fast=true：评分内核跳过 LLM 润色，优先出 grade/score（演示控延迟）。
     """
     import json
 
     from bizatlas.contracts.models import AnalyzeRequest
     from bizatlas.orchestrator.stream import stream_analysis_pipeline
 
-    req = AnalyzeRequest(company_id=company_id, intent=task)
+    req = AnalyzeRequest(
+        company_id=company_id,
+        intent=task,
+        options={"skip_polish": fast, "fast": fast, "include_stress": not fast},
+    )
 
     def event_gen():
         q: "queue.Queue[tuple]" = queue.Queue()
@@ -1334,3 +1352,106 @@ class AuthEnforcementMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 app.add_middleware(AuthEnforcementMiddleware)
+
+
+# ==================================================================
+# 贷前审批场景聚焦 · 授信准入决策 / 评分有效性验证 / 数据授权与合规
+# ==================================================================
+
+
+class CreditDecisionRequest(BaseModel):
+    """贷前授信准入决策请求。"""
+
+    company_id: str
+    applied_amount: float | None = Field(
+        default=None, description="申请额度（万元）。缺省时仅返回额度系数区间，不给绝对金额"
+    )
+    tenor_months: int | None = Field(default=None, description="申请期限（月）")
+    product: str = Field(default="流动资金贷款", description="授信产品名")
+    include_stress: bool = Field(default=False, description="是否附带压力测试（贷前默认关，控延迟）")
+    skip_polish: bool = Field(
+        default=True,
+        description="跳过 LLM 润色。决策数字本就不经 LLM，默认开启快路径",
+    )
+
+
+@app.post("/v1/credit/decision")
+@observe("api.credit_decision")
+def credit_decision(req: CreditDecisionRequest) -> Envelope[dict]:
+    """贷前授信准入决策。
+
+    把通用风险研判收敛为贷前审批场景下的一个具体决策动作：
+    是否准入、以什么条件准入、建议额度区间、是否必须转人工终审。
+
+    决策档位与额度系数全部由确定性规则计算，不经过大模型；
+    ORANGE 及以上评级、命中一票否决、担保链含失信主体、核心数据不足
+    ——以上任一情形均强制转人工终审。
+    """
+    from bizatlas.credit.decision import build_credit_decision
+
+    analyze_req = AnalyzeRequest(
+        company_id=req.company_id,
+        intent="analyze_risk",
+        options={
+            "include_stress": req.include_stress,
+            "include_kg": True,
+            "skip_polish": req.skip_polish,
+            "fast": req.skip_polish,
+        },
+    )
+    try:
+        result = run_analyze(analyze_req)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    decision = build_credit_decision(
+        result,
+        applied_amount=req.applied_amount,
+        tenor_months=req.tenor_months,
+        product=req.product,
+    )
+    return Envelope(
+        ok=True,
+        data={"decision": decision, "analysis": result},
+        meta={
+            "scenario": "pre_lending_credit_admission",
+            "manual_gate_required": decision["manual_gate"]["required"],
+            "llm_used_for_numbers": False,
+            "fast_path": bool(req.skip_polish),
+            "mode": settings.bizatlas_mode,
+        },
+    )
+
+
+@app.get("/v1/validation/backtest")
+def validation_backtest() -> Envelope[dict]:
+    """风险评分有效性回溯验证报告。
+
+    报告未生成时返回 available=false 并说明原因，不返回任何占位数字。
+    """
+    from bizatlas.validation.report import load_backtest_report
+
+    data = load_backtest_report()
+    return Envelope(
+        ok=True,
+        data=data,
+        meta={"available": bool(data.get("available"))},
+    )
+
+
+@app.get("/v1/compliance/statement")
+def compliance_statement() -> Envelope[dict]:
+    """数据授权与合规机制声明（含运行时数据源对账）。"""
+    from bizatlas.compliance.statement import load_compliance_statement
+
+    data = load_compliance_statement()
+    rec = data.get("reconciliation") or {}
+    return Envelope(
+        ok=True,
+        data=data,
+        meta={
+            "available": bool(data.get("available")),
+            "source_count": data.get("source_count", 0),
+            "declaration_consistent": rec.get("consistent"),
+        },
+    )
