@@ -1,0 +1,19 @@
+/* pages/company/list.wxss */
+.page { padding: 24rpx; }
+.search-bar { margin-bottom: 24rpx; }
+.search-input {
+  background: #fff; border: 1rpx solid #E2E8F0;
+  border-radius: 16rpx; padding: 20rpx 24rpx;
+  font-size: 28rpx;
+}
+.loading, .empty { text-align: center; color: #94A3B8; padding: 80rpx 0; }
+.company-list { display: flex; flex-direction: column; gap: 16rpx; }
+.company-card {
+  background: #fff; border-radius: 16rpx; padding: 24rpx;
+  border: 1rpx solid #E2E8F0; box-shadow: 0 1rpx 6rpx rgba(15,23,42,.04);
+}
+.company-card:active { background: #F8FAFC; }
+.company-name { font-size: 30rpx; font-weight: 600; color: #0F172A; }
+.company-meta { display: flex; align-items: center; gap: 16rpx; margin-top: 12rpx; }
+.grade-chip { font-size: 22rpx; padding: 4rpx 14rpx; border-radius: 999rpx; }
+.company-id { font-size: 22rpx; color: #94A3B8; }

@@ -1,0 +1,17 @@
+/* pages/compliance/statement.wxss */
+.page{padding:24rpx;}
+.loading{text-align:center;padding:80rpx;color:#94A3B8;}
+.card{background:#fff;border-radius:20rpx;padding:28rpx;margin-bottom:20rpx;border:1rpx solid #E2E8F0;}
+.card-title{font-size:32rpx;font-weight:700;color:#0F172A;margin-bottom:16rpx;}
+.para{font-size:26rpx;color:#334155;line-height:1.7;}
+.para.muted{color:#64748B;}
+.ds-row{padding:16rpx 0;border-bottom:1rpx solid #F1F5F9;}
+.ds-name{font-size:28rpx;font-weight:600;color:#0F172A;}
+.ds-meta{display:flex;align-items:center;gap:16rpx;margin-top:8rpx;}
+.ds-status{font-size:22rpx;padding:4rpx 12rpx;border-radius:999rpx;}
+.ds-status.on{background:#DCFCE7;color:#16A34A;}
+.ds-status.off{background:#F1F5F9;color:#64748B;}
+.ds-auth{font-size:22rpx;color:#64748B;flex:1;}
+.recon{text-align:center;padding:16rpx;border-radius:12rpx;font-size:28rpx;font-weight:600;}
+.recon.ok{background:#DCFCE7;color:#16A34A;}
+.recon.warn{background:#FFEDD5;color:#EA580C;}

@@ -1,0 +1,60 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="商舆 BizAtlas">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1F3A"/>
+      <stop offset="1" stop-color="#0E7C86"/>
+    </linearGradient>
+    <radialGradient id="sweep" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#5FE3D0" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#5FE3D0" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F6C453"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.02"/>
+    </linearGradient>
+  </defs>
+
+  <!-- rounded square app tile -->
+  <rect x="16" y="16" width="480" height="480" rx="116" ry="116" fill="url(#bg)"/>
+  <rect x="16" y="16" width="480" height="480" rx="116" ry="116" fill="none" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="2"/>
+
+  <!-- shield: protection over risk terrain -->
+  <path d="M256 96 L378 146 V252 C378 326 326 372 256 398 C186 372 134 326 134 252 V146 Z"
+        fill="url(#shield)" stroke="#9FE9DF" stroke-opacity="0.35" stroke-width="3"/>
+
+  <!-- radar rings (risk scanning) -->
+  <g stroke="#9FE9DF" stroke-opacity="0.5" fill="none" stroke-width="3">
+    <circle cx="256" cy="234" r="46"/>
+    <circle cx="256" cy="234" r="88"/>
+    <circle cx="256" cy="234" r="130"/>
+  </g>
+  <!-- radar sweep -->
+  <path d="M256 234 L256 104 A130 130 0 0 1 368 172 Z" fill="url(#sweep)"/>
+
+  <!-- enterprise node graph -->
+  <g stroke="#CFEFEA" stroke-opacity="0.75" stroke-width="2.5">
+    <line x1="256" y1="234" x2="166" y2="166"/>
+    <line x1="256" y1="234" x2="350" y2="170"/>
+    <line x1="256" y1="234" x2="302" y2="324"/>
+    <line x1="256" y1="234" x2="188" y2="318"/>
+  </g>
+  <g fill="#FFFFFF">
+    <circle cx="166" cy="166" r="9"/>
+    <circle cx="350" cy="170" r="9"/>
+    <circle cx="302" cy="324" r="9"/>
+    <circle cx="188" cy="318" r="9"/>
+  </g>
+  <!-- central node: the risk signal (gold) -->
+  <circle cx="256" cy="234" r="17" fill="url(#gold)"/>
+  <circle cx="256" cy="234" r="17" fill="none" stroke="#FFFFFF" stroke-opacity="0.85" stroke-width="2"/>
+
+  <!-- topographic contour (舆图 / terrain of risk) -->
+  <g stroke="#5FE3D0" stroke-opacity="0.32" fill="none" stroke-width="3">
+    <path d="M76 430 q60 -34 120 -10 q60 24 120 0 q60 -24 130 8"/>
+    <path d="M92 460 q54 -28 110 -8 q56 20 112 0 q56 -20 110 8"/>
+  </g>
+</svg>

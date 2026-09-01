@@ -1,0 +1,49 @@
+<!--pages/validation/report.wxml—回溯验证报告-->
+<view class="page">
+  <view wx:if="{{loading}}" class="loading">加载验证报告…</view>
+
+  <view wx:elif="{{!report.available}}" class="card unavailable">
+    <view class="unavailable-title">回溯报告暂不可用</view>
+    <view class="unavailable-reason">{{report.reason}}</view>
+    <view class="disclosure">{{report.disclosure}}</view>
+  </view>
+
+  <view wx:else class="report">
+    <view class="card">
+      <view class="card-title">评分回溯验证（{{report.version}}）</view>
+      <view class="metric-row">
+        <view class="metric big">
+          <text class="m-label">AUC</text>
+          <text class="m-value">{{report.metrics.auc.value}}</text>
+          <text class="m-ci">95% CI [{{report.metrics.auc.ci95[0]}}, {{report.metrics.auc.ci95[1]}}]</text>
+        </view>
+      </view>
+      <view class="metric-row">
+        <view class="metric">
+          <text class="m-label">KS 统计量</text>
+          <text class="m-value">{{report.metrics.ks.value}}</text>
+        </view>
+        <view class="metric">
+          <text class="m-label">ST 命中率</text>
+          <text class="m-value">{{report.metrics.recall_at_orange_plus.value * 100}}%</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="card-title">样本构成</view>
+      <view class="row"><text class="row-label">总记录数</text><text class="row-val">{{report.sample.total_records}}</text></view>
+      <view class="row"><text class="row-label">正样本（ST）</text><text class="row-val">{{report.sample.positive.count}}</text></view>
+      <view class="row"><text class="row-label">负样本（非ST）</text><text class="row-val">{{report.sample.negative.count}}</text></view>
+    </view>
+
+    <view class="card">
+      <view class="card-title">方法与局限</view>
+      <view class="row"><text class="row-label">数据源</text><text class="row-val small">{{report.methodology.data_source}}</text></view>
+      <view class="row"><text class="row-label">引擎</text><text class="row-val small">{{report.methodology.engine}}</text></view>
+      <view wx:for="{{report.methodology.limitations}}" wx:key="*this" class="limitation">• {{item}}</view>
+    </view>
+
+    <view class="disclosure">{{report.disclosure}}</view>
+  </view>
+</view>

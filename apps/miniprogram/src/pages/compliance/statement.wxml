@@ -1,0 +1,42 @@
+<!--pages/compliance/statement.wxml—数据合规声明-->
+<view class="page">
+  <view wx:if="{{loading}}" class="loading">加载合规声明…</view>
+
+  <view wx:elif="{{statement}}">
+    <view class="card">
+      <view class="card-title">产品定位</view>
+      <view class="para">{{statement.positioning.what_it_is}}</view>
+      <view wx:if="{{statement.positioning.what_it_is_not}}" class="para muted">
+        <text wx:for="{{statement.positioning.what_it_is_not}}" wx:key="*this">• {{item}}\n</text>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="card-title">数据源授权</view>
+      <view wx:for="{{statement.datasources}}" wx:key="id" class="ds-row">
+        <view class="ds-name">{{item.name || item.id}}</view>
+        <view class="ds-meta">
+          <text class="ds-status {{item.enabled ? 'on' : 'off'}}">{{item.enabled ? '已启用' : '未启用'}}</text>
+          <text class="ds-auth">{{item.authorization || item.authorization_basis || '—'}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{statement.reconciliation}}" class="card">
+      <view class="card-title">运行一致性</view>
+      <view class="recon {{statement.reconciliation.status === 'consistent' ? 'ok' : 'warn'}}">
+        {{statement.reconciliation.label || statement.reconciliation.status}}
+      </view>
+    </view>
+
+    <view wx:if="{{statement.governance}}" class="card">
+      <view class="card-title">数据治理</view>
+      <view class="para">{{statement.governance}}</view>
+    </view>
+
+    <view wx:if="{{statement.disclaimer}}" class="card">
+      <view class="card-title">免责声明</view>
+      <view class="para muted">{{statement.disclaimer}}</view>
+    </view>
+  </view>
+</view>
