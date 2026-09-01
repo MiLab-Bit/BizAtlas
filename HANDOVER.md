@@ -135,7 +135,7 @@ git checkout -- <file>    # 丢弃单文件改动
 | 🟡 P1 | **补 `QICHACHA_SECRET`** | 企查查开放平台 appsecret，与 `QICHACHA_TOKEN` 成对；缺失会导致企查查数据源不可用 |
 | 🟡 P1 | **SWAS 续费** | 与 RedTrip 共用，到期前两台服务全停（HANDOVER 原记 2026-09-22，请向阿里云后台核对实际到期日） |
 | 🟡 P1 | **ICP 备案 / 域名合规** | `sy-realm.ltd` 未备案，当前依赖 Cloudflare 隧道，建议推进备案 |
-| 🟡 P1 | **微信小程序真上传** | 把 MP 后台私钥放到 `apps/miniprogram/private.wx18d6236028c29ea9.key` + 配 request 合法域名白名单；然后 `cd apps/miniprogram && node upload_mp.mjs`（上传 v1.0.1）。另需核对 `src/utils/config.js` 中 `https://sy-realm.ltd/bizatlas/v1` 是否解析到 `139.224.163.203:8080` 且证书有效 |
+| 🟢 P1 | **微信小程序已上传** | 私钥已于 2026-09-01 放到 `apps/miniprogram/private.wx18d6236028c29ea9.key`（gitignore），`node upload_mp.mjs` 上传 **v1.0.1** 成功（exit=0）。**运行时仍需在 MP 后台配 `request` 合法域名白名单 `sy-realm.ltd`**，并核对 `src/utils/config.js` 中 `https://sy-realm.ltd/bizatlas/v1` 解析到 `139.224.163.203:8080` 且证书有效 |
 | 🟢 P2 | **`custom_pilot.yaml` 重复规则数据治理** | HEAD 已含 89 条重复的「流动比率<0.9」pilot 规则（历史 seed 冗余），属数据卫生问题，可单独做去重，不阻塞功能 |
 | 🟢 P2 | **演示数据清理（若坚持）** | 三 fixture 是测试基础设施，删除需同步改造 36 个依赖测试；建议保留，改清理服务器 `companies` 表里测试产生的企业 |
 
@@ -145,8 +145,9 @@ git checkout -- <file>    # 丢弃单文件改动
 
 - **native 小程序**（root `src/`），10 个 JS 全部 `node --check` 通过，src 仅依赖本地 `config.js`、无 npm 运行时依赖 → **无需编译步骤**。
 - 已声明 `miniprogram-ci` devDep + `upload` 脚本；pnpm 12 原生构建审批在 `pnpm-workspace.yaml` 的 `allowBuilds`（package.json 的 `pnpm.*` 字段已失效，勿用）。lockfile 已提交（`3207fa8`）。
-- **阻止点**：上传私钥 `private.wx18d6236028c29ea9.key` 缺失（MP 后台「开发管理→开发设置→密钥」下载），且需 MP 后台配 `request` 合法域名 `sy-realm.ltd`。
-- 上传命令：`cd /opt/bizatlas/apps/miniprogram && node upload_mp.mjs`。
+- **上传完成**：2026-09-01 私钥就位后 `node upload_mp.mjs` 成功上传 **v1.0.1**（exit=0，full 包 32,816 B）。私钥 `private.wx18d6236028c29ea9.key` 已 gitignore，留服务器供后续重传。
+- **运行时前置**：MP 后台「开发管理→开发设置」需把 `sy-realm.ltd` 加入 `request` 合法域名；并确认 `src/utils/config.js` 的 `https://sy-realm.ltd/bizatlas/v1` 解析到 `139.224.163.203:8080` 且 HTTPS 证书有效（否则生产环境 `wx.request` 不通）。
+- 重传命令：`cd /opt/bizatlas/apps/miniprogram && node upload_mp.mjs`。
 
 ---
 
@@ -160,8 +161,9 @@ git checkout -- <file>    # 丢弃单文件改动
 - [ ] GitHub SSH Deploy Key 推送机制已知（`:443` 限流，走 `:22`）
 - [ ] `git log` 近期提交链已知（CI 绿基线 = `bfcbbe8`）
 - [ ] `POST /v1/analyze` fixture 链路已实跑通过（healthy/risky/defaulted）
-- [ ] 微信小程序私钥就位 + 域名白名单已配后执行 `node upload_mp.mjs`
+- [x] 微信小程序 v1.0.1 已上传（私钥就位，`node upload_mp.mjs` 成功）
+- [ ] MP 后台 `request` 合法域名白名单 `sy-realm.ltd` 已配（运行时前置，否则 `wx.request` 不通）
 
 ---
 
-*最后更新：2026-09-01 · 179 passed · CI 绿 · 小程序构建就绪待上传*
+*最后更新：2026-09-01 · 179 passed · CI 绿 · 小程序 v1.0.1 已上传*

@@ -98,7 +98,7 @@ cd apps/web && npm install && npm run dev
 | 信用报告 Word / PDF 导出 | ✅ |
 | NL 加规则 / 本地 RAG / 担保链 KG | ✅ |
 | 压力测试 / 多源冲突 / 五维归因 | ✅ |
-| 微信小程序（构建就绪，待上传） | 🟡 |
+| 微信小程序（已上传 v1.0.1，待配域名白名单） | ✅ |
 | CI/CD（GitHub Actions，覆盖率 ≥ 75%） | ✅ 绿 |
 
 ---
