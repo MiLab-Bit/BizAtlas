@@ -87,3 +87,55 @@ def feedback_summary(limit: int = 500) -> dict[str, Any]:
         "adoption_rate": adoption_rate,
         "note": "采纳率 = accepted/(accepted+overridden)；标签可回灌校准层做 AUC/KS 验证",
     }
+
+
+
+def feedback_dashboard(limit: int = 200) -> dict[str, Any]:
+    """效果度量看板：聚合反馈事件的决策分布、采纳率、平均时延与近期事件。
+
+    仅基于 feedback_events 实表，绝不编造数字。
+    """
+    conn = get_connection()
+    try:
+        total = conn.execute("SELECT COUNT(*) AS n FROM feedback_events").fetchone()["n"]
+        by_action = {
+            r["action"]: r["n"]
+            for r in conn.execute("SELECT action, COUNT(*) AS n FROM feedback_events GROUP BY action")
+        }
+        by_decision = {
+            r["decision"]: r["n"]
+            for r in conn.execute(
+                "SELECT decision, COUNT(*) AS n FROM feedback_events "
+                "WHERE decision IS NOT NULL GROUP BY decision"
+            )
+        }
+        lat = conn.execute(
+            "SELECT AVG(latency_ms) AS a FROM feedback_events WHERE latency_ms IS NOT NULL"
+        ).fetchone()["a"]
+    finally:
+        conn.close()
+    accepted = by_action.get("report_accepted", 0) + by_action.get("decision_accepted", 0)
+    overridden = by_action.get("report_overridden", 0) + by_action.get("decision_overridden", 0)
+    adoption_rate = round(accepted / (accepted + overridden), 4) if (accepted + overridden) else None
+    recent = _recent_feedback(limit)
+    return {
+        "total_events": total,
+        "by_action": by_action,
+        "by_decision": by_decision,
+        "avg_latency_ms": round(lat, 2) if lat is not None else None,
+        "adoption_rate": adoption_rate,
+        "recent": recent,
+    }
+
+
+def _recent_feedback(limit: int = 200) -> list[dict[str, Any]]:
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT report_id, company_id, analyst, action, decision, comment, latency_ms, created_at "
+            "FROM feedback_events ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]

@@ -1,23 +1,18 @@
-"""票据/单证 OCR 数据源（P2 多模态票据 OCR 占位 + 优雅降级）。
+"""票据/单证 OCR 数据源（P2 多模态票据 OCR，接 ingest.vision 视觉后端）。
 
-接口契约：声明「发票/单据结构化抽取」标准返回。依赖视觉后端
-（vision_enabled + vision_backend）做多模态 OCR；未配置时显式降级。
-
-接入具体 OCR/VLM 时，在 :func:`_extract_real` 内填充实调用。
+- 配置视觉后端（或复用 LLM）后，extract_invoice 实调用 VLM 抽取票面字段。
+- 未配置时显式降级（ok=False + 原因），绝不抛异常、绝不编造数字。
 """
 from __future__ import annotations
 
 from typing import Any
 
-from bizatlas.config import get_settings
+from bizatlas.ingest.vision import vision_ocr_available, vision_ocr_image
 
 
 def invoice_ocr_configured() -> bool:
-    """是否配置了视觉后端（多模态票据 OCR 前置）。"""
-    s = get_settings()
-    return bool(getattr(s, "vision_enabled", False)) and bool(
-        getattr(s, "vision_api_key", "").strip()
-    )
+    """票据 OCR 是否可用（vision/LLM 任一配置了 key+base）。"""
+    return vision_ocr_available()
 
 
 def extract_invoice(file_path: str) -> dict[str, Any]:
@@ -25,7 +20,7 @@ def extract_invoice(file_path: str) -> dict[str, Any]:
 
     Returns:
         {source, file, ok, message, fields}
-        - ok=False：降级/未配置。fields=None。绝不编造票面数字。
+        - ok=False：降级/未配置/调用失败。fields=None。绝不编造票面数字。
     """
     out: dict[str, Any] = {
         "source": "invoice_ocr",
@@ -35,13 +30,21 @@ def extract_invoice(file_path: str) -> dict[str, Any]:
         "fields": None,
     }
     if not invoice_ocr_configured():
-        out["message"] = "视觉后端未启用（vision_enabled=false 或 vision_api_key 为空），票据 OCR 降级跳过"
+        out["message"] = "视觉后端未配置（vision_api_key 与 llm_api_key 均为空），票据 OCR 降级跳过"
         return out
-    # TODO: 接入具体 OCR/VLM（保留 _extract_real 钩子）
-    out["message"] = "票据 OCR 已配置视觉后端但实调用未实现（待接入具体模型）"
+    try:
+        fields = _extract_real(file_path)
+        out["ok"] = True
+        out["fields"] = fields
+        out["message"] = "票据 OCR 实调用成功"
+    except Exception as exc:  # noqa: BLE001
+        out["message"] = f"票据 OCR 实调用失败：{exc}"
     return out
 
 
 def _extract_real(file_path: str) -> dict[str, Any]:
-    """实调用钩子：接入具体 OCR/VLM 时实现。返回票面字段（金额/税号/日期…）。"""
-    raise NotImplementedError("票据 OCR 实调用待接入具体视觉模型")
+    """实调用：委托视觉后端做 VLM 结构化抽取，返回票面字段。"""
+    res = vision_ocr_image(file_path)
+    if not res["ok"]:
+        raise RuntimeError(res["message"])
+    return res["fields"]
