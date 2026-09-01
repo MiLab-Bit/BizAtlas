@@ -91,3 +91,10 @@ vite_dbg.log
 apps/web/.npmrc
 
 vite_*.log
+
+# 回溯/测试运行产物（通用）
+backtest*.txt
+backtest*.json
+pytest*.txt
+empty.yml
+content/validation/backtest_report.json
