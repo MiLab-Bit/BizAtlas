@@ -10,6 +10,7 @@ def build_onepager(
     company: dict[str, Any],
     risk: dict[str, Any],
     metrics_count: int,
+    citations: list | None = None,
 ) -> dict[str, Any]:
     """Assemble one-page risk summary slots from computed risk only (no LLM numbers)."""
     hits = risk.get("hits") or []
@@ -48,6 +49,7 @@ def build_onepager(
             "tier_mix": quality.get("tier_mix"),
         },
         "disclaimer": "关键数字来自抽取/规则计算；AI 未改写数值。本报告为辅助建议，不构成授信决策。",
+        "citations": list(citations or []),
     }
 
 
@@ -99,4 +101,11 @@ def render_onepager_markdown(payload: dict[str, Any]) -> str:
             "",
         ]
     )
+    cites = payload.get("citations") or []
+    if cites:
+        lines.extend(["", "## 溯源（指标出处）"])
+        for c in cites[:15]:
+            page = f" 第{c.get('page')}页" if c.get("page") else ""
+            lines.append(f"- {c.get('label')} = {c.get('value')}（{c.get('tier')}{page}）")
+        lines.append("")
     return "\n".join(lines)

@@ -1,117 +1,76 @@
-# BizAtlas 数据源注册表（占位）
-# 配密钥时：改 enabled / 填 .env 对应变量即可逐个点亮
-# 实现落位：packages/bizatlas/data/providers_<id>.py（活跃实现，读取本表 + 环境变量）
-
 version: 1
-
+# 数据源注册表：声明 BizAtlas 接入的外部数据/模型源。
+# compliance/statement.py 会把本声明与运行时实际启用状态对账，
+# 差异（running_not_declared / declared_not_running）会显式暴露，
+# 声明即事实，不允许「文档写一套、系统跑另一套」。
 providers:
-  # ---------- P0：始终可用 / 本地 ----------
-  - id: upload
-    name: 用户上传解析
-    tier: L1
-    enabled: true          # 主源，勿关
-    needs_key: false
-    env: []
-    serves: [financial, operating, documents]
-    status: ready          # ready | stub | disabled
-
-  - id: fixture
-    name: 演示案例 Fixtures
-    tier: L2
-    enabled: true
-    needs_key: false
-    env: []
-    serves: [financial, judicial, related, sentiment]
-    status: ready
-
-  - id: industry_static
-    name: 静态行业参数
-    tier: L3
-    enabled: true
-    needs_key: false
-    env: []
-    serves: [industry]
-    status: ready          # content/industry/benchmarks.yaml
-
-  # ---------- P0：财务 API（逐个配）----------
-  - id: akshare
-    name: AKShare 财务
-    tier: L1
-    enabled: true
-    needs_key: false
-    env: []
-    serves: [financial, industry]
-    status: ready
-    notes: 已实现并安装（akshare 1.18）；实测通过
-
-  - id: tushare
-    name: Tushare Pro 财务
-    tier: L1
-    enabled: true
-    needs_key: true
-    env: [TUSHARE_TOKEN]
-    serves: [financial]
-    status: ready
-    notes: 已实现（fina_indicator 需 500 积分；免费 token 自动降级 daily 行情）
-
-  # ---------- P1：工商司法（二选一主用）----------
-  - id: tianyancha
-    name: 天眼查
-    tier: L1
-    enabled: true
-    needs_key: true
-    env: [TIANYANCHA_TOKEN]
-    serves: [company_basic, judicial, related]
-    status: ready
-    notes: 背调主源；与 qichacha 只启用一个
-
   - id: qichacha
-    name: 企查查
-    tier: L1
-    enabled: false
+    name: 企查查开放平台
+    enabled: true
+    status: ready
     needs_key: true
     env: [QICHACHA_TOKEN, QICHACHA_SECRET]
-    serves: [company_basic, judicial, related]
-    status: ready
-    notes: 已实现（需 appkey+appsecret 签名）；registry 关闭，单源策略主用天眼查
+    authorization: "需企查查开放平台 appkey+appsecret（企业与用户授权）"
+    contains_personal_info: false
 
-  - id: company_json_import
-    name: 工商司法 JSON 导入
-    tier: L2
+  - id: tianyancha
+    name: 天眼查开放API
     enabled: true
+    status: ready
+    needs_key: true
+    env: [TIANYANCHA_TOKEN]
+    authorization: "需天眼查开放API token（企业与用户授权）"
+    contains_personal_info: false
+
+  - id: tushare
+    name: TuShare Pro
+    enabled: true
+    status: ready
+    needs_key: true
+    env: [TUSHARE_TOKEN]
+    authorization: "需 TuShare Pro token（行情/基本面，聚合公开数据）"
+    contains_personal_info: false
+
+  - id: akshare_news
+    name: AkShare 新闻
+    enabled: true
+    status: ready
     needs_key: false
     env: []
-    serves: [company_basic, judicial, related]
-    status: ready
-    notes: 已实现（读 COMPANY_JSON_DIR 下 <key>.json，灵活字段映射）；无商业 Key 时兜底
+    authorization: "聚合公开财经新闻，无需密钥"
+    contains_personal_info: false
 
-  # ---------- P1：公告 ----------
   - id: cninfo
-    name: 巨潮公告
-    tier: L1
+    name: 巨潮资讯（公告）
     enabled: true
+    status: ready
     needs_key: false
     env: []
-    serves: [announcements]
-    status: ready
-    notes: 已实现（免费）；端点 /new/hisAnnouncement/query + 沪深京 szse_stock.json 取 orgId，实测沪/深/创业板均可用
+    authorization: "聚合公开上市公司公告"
+    contains_personal_info: false
 
-  # ---------- P2：舆情 ----------
-  - id: news_akshare
-    name: 新闻舆情（AKShare 通道）
-    tier: L1
+  - id: credit_bureau
+    name: 征信数据源（百行/朴道/央行征信前置）
+    enabled: false
+    status: stub
+    needs_key: true
+    env: [CREDIT_BUREAU_TOKEN]
+    authorization: "需持牌征信机构授权与合规协议"
+    contains_personal_info: true
+
+  - id: invoice_ocr
+    name: 票据/单证多模态 OCR
+    enabled: false
+    status: stub
+    needs_key: false
+    env: [VISION_API_KEY]
+    authorization: "依赖视觉后端（vision_enabled + VISION_API_KEY）"
+    contains_personal_info: false
+  - id: upload
+    name: 文件上传抽取（本地）
     enabled: true
+    status: ready
     needs_key: false
     env: []
-    serves: [sentiment]
-    status: ready
-    notes: 已实现（ak.stock_news_em）；实测通过
-
-# 字段解析优先级（高 → 低）；未启用的自动跳过
-resolve_order:
-  financial: [upload, tushare, akshare, fixture, industry_static]
-  judicial: [tianyancha, qichacha, company_json_import, fixture]
-  related: [tianyancha, qichacha, company_json_import, fixture]
-  industry: [industry_static, akshare, fixture]
-  sentiment: [news_akshare, fixture]
-  announcements: [cninfo, upload, fixture]
+    authorization: "本地文件上传，不上外部源"
+    contains_personal_info: false

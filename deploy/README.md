@@ -1,71 +1,30 @@
-# BizAtlas / 商舆 · 阶段 3 部署运行手册
+# BizAtlas 私有化部署包（P0-② 最小合规）
 
-本目录提供容器化与编排骨架，配合 `apps/api`（FastAPI）实现企业化部署：
-RBAC 鉴权、可观测（日志/指标/追踪）、高可用（健康探针 + 重启策略 + 状态持久化）。
+目标：**数据不出域、鉴权默认开启、一键起服务**。适用于中小金融机构内网 /
+专有云部署，满足「私有化小模型 + 可审计」的差异化定位。
 
-## 1. 目录
+## 组件
+- `Dockerfile` — 基于 python:3.11-slim，依赖先装（层缓存），密钥经 `.env` 注入。
+- `docker-compose.yml` — 单服务，卷持久化 `data/uploads/exports`，带健康检查。
+- `.env.example` — 全部环境变量模板（含鉴权/LLM/数据源/视觉后端）。
+- `privatize.sh` — 一键生成强随机 `AUTH_SECRET`/`BOOTSTRAP_TOKEN`/`INTEGRITY_SECRET`，
+  并强制 `BIZATLAS_AUTH_DISABLED=false`。
 
-- `Dockerfile`：基于 `python:3.12-slim` 的单阶段镜像，内置 liveness 健康检查。
-- `docker-compose.yml`：单服务编排，`restart: unless-stopped` + 健康检查 + 数据卷。
-- `.dockerignore`：排除本地 venv / 数据 / 前端依赖，控制镜像体积。
-
-## 2. 本地构建与启动
-
+## 步骤
 ```bash
-# 在仓库根目录
-docker build -f deploy/Dockerfile -t bizatlas:0.3.0 .
-docker run --rm -p 8000:8000 bizatlas:0.3.0
-
-# 或用 compose（含持久化卷与环境）
-cd deploy && docker compose up --build
+cp .env.example .env          # 填写 LLM / 数据源密钥
+./privatize.sh                # 生成鉴权与签名密钥（幂等）
+docker compose up -d          # 起服务
+curl http://127.0.0.1:8000/v1/healthz
 ```
 
-启动后探测：
-- 存活：`GET /v1/health/live`
-- 就绪：`GET /v1/health/ready`（检查 DB 可达）
-- 指标：`GET /v1/metrics`（Prometheus 文本）/ `?fmt=json`
+## 首管理员引导
+部署后访问 `POST /v1/admin/bootstrap`，Header 带 `X-Bootstrap-Token: <BOOTSTRAP_TOKEN>`，
+创建首个 admin 账号，随后用其令牌调用其余端点。
 
-## 3. 鉴权（RBAC）开启
-
-默认 `BIZATLAS_AUTH_DISABLED=true`：等价 ADMIN 全放行，前端/演示无感。
-生产开启：
-
-```bash
-export BIZATLAS_AUTH_DISABLED=false
-export BIZATLAS_AUTH_SECRET="<强随机密钥>"
-```
-
-调用方在请求头带令牌（HMAC，由 `bizatlas.auth.rbac.issue_token` 签发）：
-
-```
-Authorization: Bearer <token>
-```
-
-角色与权限矩阵（最小权限）：
-
-| 角色 | 权限域 |
-| --- | --- |
-| viewer | 读 |
-| analyst | 读 / 写 / 调用工具 / 导出报告 |
-| reviewer | 读 / 复核通过 / 复核驳回 |
-| admin | 全部（含角色/审计管理） |
-
-受门禁的端点示例：`/v1/providers/akshare/fetch`（tool:call）、
-`/v1/rules/.../activate`（rules:manage）、报告导出 confirm（reports:export）、
-`/v1/workflows/{id}/review`（复核）、`/v1/admin/rbac`（admin）。
-
-## 4. 高可用与扩展
-
-- API 服务**无状态**：确定性评分内核 + 外部数据源降级，多副本前置 LB 即可水平扩展。
-- 持久状态（SQLite / 上传 / 导出）已通过卷挂载，升级镜像不丢数据。
-- 生产建议将 SQLite 替换为托管 Postgres（改动集中在 `bizatlas/data/db.py`）。
-- 指标接入 Prometheus + Grafana；日志为结构化 JSON，直接喂 Loki/ELK。
-
-## 5. 工具治理（运行期）
-
-启动自动注册受治理工具（权限 + 熔断 + 沙箱）：
-- `rag.search`（本地检索，离线可用）
-- `data.provider_fetch`（外部数据源，沙箱隔离 + 熔断）
-- `ingest.vision_parse`（视觉解析，沙箱隔离 + 熔断）
-
-外部后端连续失败会自动熔断（快速失败防雪崩）；单次挂起由沙箱超时强制终止。
+## 合规要点
+- 鉴权关闭开关 `BIZATLAS_AUTH_DISABLED` 在私有化镜像中默认 `false`。
+- 报告完整性签名 `BIZATLAS_INTEGRITY_SECRET` 缺失时报告会降级告警（已在 bootstrap 自检）。
+- 所有数据源未配置即优雅降级，不阻断启动；运行时实际启用状态由
+  `GET /v1/compliance/statement` 与 `GET /v1/health` 显式暴露。
+- 审计：登录类事件 + 每个敏感 API 调用均写入 `audit_log`（append-only）。

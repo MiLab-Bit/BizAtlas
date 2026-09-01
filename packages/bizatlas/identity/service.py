@@ -270,6 +270,16 @@ def _audit(user_id: Optional[str], action: str, detail: str, ip: Optional[str]) 
         conn.close()
 
 
+def audit_api_call(
+    user_id: Optional[str], action: str, detail: str, ip: Optional[str]
+) -> None:
+    """记录一次 API 调用的审计事件（与登录类审计共用 audit_log 表）。
+
+    action 形如 "POST /v1/credit/decision"；本函数只写不阻断。
+    """
+    _audit(user_id, f"api:{action}", detail, ip)
+
+
 def list_audit(user_id: Optional[str] = None, limit: int = 50) -> list[dict]:
     conn = get_connection()
     try:

@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     tianyancha_token: str = ""
     qichacha_token: str = ""  # 企查查开放平台 appkey
     qichacha_secret: str = ""  # 企查查开放平台 appsecret（签名用，与 appkey 成对）
+    credit_bureau_token: str = ""  # 征信数据源令牌（百行/朴道/央行征信前置，接入时填）
     company_json_dir: str = str(ROOT / "content" / "fixtures" / "company_json")
 
     llm_provider: str = "openai_compatible"
@@ -51,7 +52,7 @@ class Settings(BaseSettings):
     # bizatlas_auth_disabled 默认 True：保持旧演示/前端无感（等价 ADMIN 放行）。
     # 生产部署：设 bizatlas_auth_disabled=false 并提供 bizatlas_auth_secret，
     # 端点即启用 RBAC。
-    bizatlas_auth_disabled: bool = True
+    bizatlas_auth_disabled: bool = False
     bizatlas_auth_secret: str = ""
 
     # 一次性首管理员引导令牌：设非空时，/v1/admin/bootstrap 在系统无 admin 时可用。

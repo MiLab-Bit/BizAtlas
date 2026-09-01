@@ -124,11 +124,26 @@ def check_compliance_reconciliation() -> dict[str, Any]:
 _LAST_BOOT: dict[str, Any] = {}
 
 
+def check_auth_posture() -> dict[str, Any]:
+    """启动时校验鉴权态势：开启但无密钥 = 配置错误，告警。"""
+    settings = get_settings()
+    if settings.bizatlas_auth_disabled:
+        logger.info("auth disabled (dev mode) — 生产部署应设 BIZATLAS_AUTH_DISABLED=false")
+        return {"auth_disabled": True, "warning": False}
+    if not settings.bizatlas_auth_secret:
+        logger.warning(
+            "auth ENABLED 但 BIZATLAS_AUTH_SECRET 为空：端点将因缺密钥而放行，属配置错误，须补密钥"
+        )
+        return {"auth_disabled": False, "warning": True, "reason": "auth 开启但缺密钥"}
+    return {"auth_disabled": False, "warning": False}
+
+
 def run_startup_bootstrap() -> dict[str, Any]:
     """lifespan 调用的总入口。"""
     llm_seed = seed_platform_llm_from_env()
     compliance = check_compliance_reconciliation()
-    result = {"llm_seed": llm_seed, "compliance": compliance}
+    auth = check_auth_posture()
+    result = {"llm_seed": llm_seed, "compliance": compliance, "auth": auth}
     _LAST_BOOT.clear()
     _LAST_BOOT.update(result)
     return result
