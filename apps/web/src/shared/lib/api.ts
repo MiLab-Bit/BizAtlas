@@ -726,3 +726,124 @@ export async function deleteModelProvider(id: string): Promise<void> {
     method: "DELETE",
   });
 }
+
+// ---- 贷前审批场景聚焦：授信决策卡 + 回溯验证 + 数据合规 ----
+export interface CreditDecisionCondition {
+  id: string;
+  dimension: string;
+  requirement: string;
+  scenario: string;
+  severity: string;
+}
+export interface CreditDecision {
+  scenario: string;
+  product: string;
+  company: { id: string; name: string; industry: string };
+  application: { applied_amount: number; tenor_months: number; unit: string };
+  decision: string;
+  decision_label: string;
+  decision_reasons: string[];
+  risk_grade: string;
+  risk_score: number;
+  manual_gate: { required: boolean; reason: string; approver_role: string };
+  limit: {
+    currency: string;
+    unit: string;
+    applied_amount: number;
+    ratio_min: number;
+    ratio_max: number;
+    suggested_min: number;
+    suggested_max: number;
+    haircut: number;
+    haircut_basis: string | null;
+    basis: string;
+    note: string;
+  };
+  guarantee_contagion: {
+    exposure_level: string;
+    chain_depth: number;
+    nodes: number;
+    edges: number;
+    dishonest_in_chain: string[];
+    negative_rated_in_chain: number;
+    note: string;
+  };
+  data_completeness: {
+    core_score: number;
+    core_missing: string[];
+    enrich_score: number;
+    enrich_missing: string[];
+    note: string;
+  };
+  conditions: CreditDecisionCondition[];
+}
+
+export interface BacktestMetrics {
+  auc: number;
+  auc_ci: [number, number];
+  auc_direction: string;
+  ks: number;
+  recall_at_orange_plus: number;
+  false_positive_at_orange_plus: number;
+  lead_time?: { mean_years: number | null; median_years: number | null; note: string };
+  sample?: { total: number; positive: number; negative: number };
+}
+export interface BacktestReport {
+  available: boolean;
+  reason?: string;
+  method?: string;
+  as_of?: string;
+  metrics?: BacktestMetrics;
+  caveats?: string[];
+  generated_at?: string;
+}
+
+export interface ComplianceSource {
+  id: string;
+  name: string;
+  category: string;
+  provenance: string;
+  authorization: string;
+  contains_personal_info: string;
+  personal_info_handling: string;
+  usage_limit: string;
+  retention: string;
+  refresh: string;
+}
+export interface ComplianceStatement {
+  version: number;
+  updated_at: string;
+  applicable_scenario: string;
+  positioning: { what_it_is: string; what_it_is_not: string[]; boundary_note: string };
+  sources?: ComplianceSource[];
+  source_count?: number;
+  reconciliation?: { consistent: boolean; running_not_declared: string[]; declared_not_running: string[] };
+  governance?: { mechanism: string[]; limitation: string };
+  disclaimer?: string;
+}
+
+export function postCreditDecision(
+  companyId: string,
+  appliedAmount: number,
+  tenorMonths: number,
+  runFresh = false,
+): Promise<CreditDecision> {
+  return getEnvelope("/v1/credit/decision", z.any(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      company_id: companyId,
+      applied_amount: appliedAmount,
+      tenor_months: tenorMonths,
+      run_fresh: runFresh,
+    }),
+  });
+}
+
+export function getBacktestReport(): Promise<BacktestReport> {
+  return getEnvelope("/v1/validation/backtest", z.any());
+}
+
+export function getComplianceStatement(): Promise<ComplianceStatement> {
+  return getEnvelope("/v1/compliance/statement", z.any());
+}

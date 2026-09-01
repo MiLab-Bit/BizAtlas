@@ -27,6 +27,8 @@ const NAV = [
   ["/rules", "规则中心", Scale, "自定义风险规则", false],
   ["/investigation", "Agent 调查", Network, "多 Agent 协作过程回放", false],
   ["/engineering", "工程能力", Bot, "Agent 编排与技术架构说明", false],
+  ["/credit-decision", "贷前审批", Scale, "授信准入决策卡与额度建议", false],
+  ["/validation", "验证与合规", Database, "回溯 AUC 与数据授权对账", false],
   ["/model-config", "模型配置", KeyRound, "配置你自己的大模型供应商密钥", false],
 ] as const;
 

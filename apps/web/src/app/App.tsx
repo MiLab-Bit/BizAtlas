@@ -9,6 +9,8 @@ import { RulesPage } from "../pages/RulesPage";
 import { WorkbenchPage } from "../pages/WorkbenchPage";
 import { EngineeringPage } from "../pages/EngineeringPage";
 import { ModelConfigPage } from "../pages/ModelConfigPage";
+import { CreditDecisionPage } from "../pages/CreditDecisionPage";
+import { ValidationPage } from "../pages/ValidationPage";
 import { Shell } from "./Shell";
 
 export function App() {
@@ -22,6 +24,8 @@ export function App() {
           <Route path="rules" element={<RulesPage />} />
           <Route path="reports" element={<ReportsPage />} />
           <Route path="engineering" element={<EngineeringPage />} />
+          <Route path="credit-decision" element={<CreditDecisionPage />} />
+          <Route path="validation" element={<ValidationPage />} />
           <Route path="model-config" element={<ModelConfigPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
