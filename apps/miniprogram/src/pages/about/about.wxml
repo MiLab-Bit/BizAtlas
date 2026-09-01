@@ -1,0 +1,29 @@
+<!--pages/about/about.wxml-->
+<view class="page">
+  <view class="card">
+    <view class="title">商舆 BizAtlas</view>
+    <view class="sub">企业经营与风险研判 Agent</view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">核心能力</view>
+    <view class="list">• 任务理解：自然语言解析企业风险诉求</view>
+    <view class="list">• 多源融合：工商 / 财务 / 司法 / 舆情 / 担保图谱</view>
+    <view class="list">• 规则引擎：16 项指标 × 五维加权评分</view>
+    <view class="list">• 可溯源：每个分数附带依据链与置信度</view>
+    <view class="list">• 人工闸门：中高风险强制人工复核</view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">聚焦场景：贷前审批</view>
+    <view class="para">面向银行 / 金融机构信贷审批场景，通过多源数据融合与规则引擎，输出可解释、可溯源的风险评分与审批决策。</view>
+    <view class="para"><text class="hl">特色：</text>担保圈风险传染量化 + 数字可溯源机制。</view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">评分验证</view>
+    <view class="para">回溯验证 AUC = 0.630（95%CI [0.582, 0.676]），KS = 0.211。完整报告含样本构成、方法与局限性披露。</view>
+  </view>
+
+  <view class="footer">© 2026 BizAtlas · MiLab-Bit</view>
+</view>

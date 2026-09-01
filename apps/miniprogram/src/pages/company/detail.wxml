@@ -1,0 +1,21 @@
+<!--pages/company/detail.wxml-->
+<view class="page">
+  <view wx:if="{{loading}}" class="loading">加载中…</view>
+  <view wx:elif="{{company}}">
+    <view class="card">
+      <view class="title">{{company.name || company.id}}</view>
+      <view class="grade" style="color:{{company.gradeStyle.color}};background:{{company.gradeStyle.bg}}">{{company.gradeStyle.label}}</view>
+    </view>
+    <view class="card">
+      <view class="card-title">基本信息</view>
+      <view class="row"><text class="k">企业ID</text><text class="v">{{company.id}}</text></view>
+      <view class="row" wx:if="{{company.industry}}"><text class="k">行业</text><text class="v">{{company.industry}}</text></view>
+      <view class="row" wx:if="{{company.score !== undefined}}"><text class="k">风险分</text><text class="v">{{company.score}}</text></view>
+    </view>
+    <view wx:if="{{company.summary}}" class="card">
+      <view class="card-title">概览</view>
+      <view class="para">{{company.summary}}</view>
+    </view>
+    <button class="btn" bindtap="load">刷新</button>
+  </view>
+</view>

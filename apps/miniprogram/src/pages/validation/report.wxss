@@ -1,0 +1,19 @@
+/* pages/validation/report.wxss */
+.page { padding:24rpx; }
+.loading { text-align:center; padding:80rpx; color:#94A3B8; }
+.card { background:#fff; border-radius:20rpx; padding:28rpx; margin-bottom:20rpx; border:1rpx solid #E2E8F0; }
+.card-title { font-size:32rpx; font-weight:700; color:#0F172A; margin-bottom:20rpx; }
+.metric-row { display:flex; gap:16rpx; margin-bottom:16rpx; }
+.metric { flex:1; background:#F8FAFC; border-radius:12rpx; padding:20rpx; text-align:center; }
+.metric.big { background:linear-gradient(135deg,#1E3A8A,#2563EB); color:#fff; }
+.m-label { display:block; font-size:22rpx; opacity:.8; }
+.m-value { display:block; font-size:44rpx; font-weight:700; }
+.m-ci { display:block; font-size:20rpx; opacity:.7; margin-top:4rpx; }
+.row { display:flex; justify-content:space-between; padding:10rpx 0; border-bottom:1rpx solid #F1F5F9; }
+.row-label { color:#64748B; font-size:26rpx; }
+.row-val { color:#0F172A; font-size:26rpx; font-weight:500; }
+.row-val.small { font-size:22rpx; max-width:60%; text-align:right; }
+.limitation { font-size:24rpx; color:#475569; line-height:1.6; padding:6rpx 0; }
+.disclosure { font-size:22rpx; color:#94A3B8; padding:24rpx; line-height:1.5; }
+.unavailable-title { font-size:32rpx; font-weight:600; color:#EA580C; }
+.unavailable-reason { font-size:26rpx; color:#475569; margin-top:12rpx; }

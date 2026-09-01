@@ -1,0 +1,17 @@
+[Unit]
+Description=BizAtlas / ShangYu API
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/bizatlas
+ExecStart=/opt/bizatlas/venv/bin/python -m apps.api.launcher
+Restart=on-failure
+RestartSec=3
+User=root
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bizatlas
+
+[Install]
+WantedBy=multi-user.target

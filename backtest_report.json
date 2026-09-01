@@ -1,0 +1,68 @@
+{
+  "available": true,
+  "generated_at": "2026-08-29T10:38:00+08:00",
+  "version": "v4",
+  "sample": {
+    "total_records": 675,
+    "positive": {
+      "label": "名称含 ST/*ST 的 A 股上市主体",
+      "count": 480,
+      "note": "属风险事件代理标签，存在名字残留但已恢复的情况，会稀释区分度"
+    },
+    "negative": {
+      "label": "配对非 ST 上市公司",
+      "count": 195
+    },
+    "expansion": "同一公司按年报期展开，属重复观测；计算 AUC 时按样本聚合"
+  },
+  "metrics": {
+    "auc": {
+      "value": 0.63,
+      "ci95": [
+        0.582,
+        0.676
+      ],
+      "interpretation": "分数越高风险越高；AUC>0.5 表明评分具备方向性区分力，但单源财务数据下区分力有限"
+    },
+    "ks": {
+      "value": 0.211
+    },
+    "recall_at_orange_plus": {
+      "value": 0.0,
+      "numerator": 0,
+      "denominator": 480,
+      "note": "纯财务源未纳入事件类否决项（连续亏损/非标审计/失信被执行），ORANGE+ 阈值未被触发属预期"
+    },
+    "false_positive_at_orange_plus": {
+      "value": 0.0,
+      "numerator": 0,
+      "denominator": 195
+    },
+    "lead_time": {
+      "value": null,
+      "reason": "免费数据源无法稳定取得'被 ST 实施起始年'，未能量化提前预警期；需接入权威 ST 历史事件库后补算"
+    }
+  },
+  "score_profile": {
+    "positive_mean_score": 29.05,
+    "negative_mean_score": 26.97,
+    "positive_grade_dist": {
+      "YELLOW": 480
+    },
+    "negative_grade_dist": {
+      "YELLOW": 195
+    }
+  },
+  "methodology": {
+    "data_source": "AKShare stock_financial_abstract（同花顺源）",
+    "mapping": "按年报期映射规则库中文指标（资产负债率/流动比率/速动比率/ROE/毛利率/营收增速/经营现金净额比）共 7 维",
+    "engine": "BizAtlas RuleEngine + score_risk 五维加权评分",
+    "computation": "sklearn roc_auc_score + 1000 次 bootstrap 置信区间",
+    "limitations": [
+      "单源局限：本次回溯仅喂入财务维度，未纳入工商/司法/担保图谱/舆情等外部事件",
+      "标签局限：正样本为名称含 ST 的代理标签，存在已摘帽但名称未改的情况",
+      "预警期缺失：免费源无法取得 ST 实施起始年，提前预警期指标待接入权威事件库后补算"
+    ]
+  },
+  "disclosure": "本系统不对评分有效性给出超出本报告样本与方法的量化主张；未纳入工商/司法/担保图谱数据源的回溯不构成对完整引擎区分力的最终结论。"
+}
