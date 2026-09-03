@@ -1,197 +1,345 @@
-# 种子规则 ≥20：财务红线 + 经营/事件（MVP）
 rules:
-  - id: R1001
-    name: 短期偿债能力红线
-    dimension: 财务
-    severity: 高
-    status: active
-    condition: { type: threshold, metric: 流动比率, op: "<", value: 1.0 }
-    message: 流动比率低于 1，短期偿债压力大
+- id: R1001
+  name: 短期偿债能力红线
+  dimension: 财务
+  severity: 高
+  status: active
+  condition:
+    type: threshold
+    metric: 流动比率
+    op: <
+    value: 1.0
+  message: 流动比率低于 1，短期偿债压力大
+- id: R1002
+  name: 速动比率预警
+  dimension: 财务
+  severity: 中
+  status: active
+  condition:
+    type: threshold
+    metric: 速动比率
+    op: <
+    value: 0.8
+  message: 速动比率偏低
+- id: R1003
+  name: 杠杆偏高
+  dimension: 财务
+  severity: 高
+  status: active
+  condition:
+    type: threshold
+    metric: 资产负债率
+    op: '>'
+    value: 0.7
+  message: 资产负债率超过 70%
+- id: R1004
+  name: 利息保障不足
+  dimension: 财务
+  severity: 高
+  status: active
+  condition:
+    type: threshold
+    metric: 利息保障倍数
+    op: <
+    value: 2.0
+  message: 利息保障倍数低于 2
+- id: R1005
+  name: 盈利质量存疑
+  dimension: 财务
+  severity: 高
+  status: active
+  condition:
+    type: threshold
+    metric: 经营现金流/净利润
+    op: <
+    value: 0.0
+  message: 经营现金流相对净利润偏弱（模板简化：比值<0）
+- id: R1006
+  name: 商誉占比过高
+  dimension: 财务
+  severity: 中
+  status: active
+  condition:
+    type: threshold
+    metric: 商誉占比
+    op: '>'
+    value: 0.3
+  message: 商誉占净资产超过 30%
+- id: R1007
+  name: 毛利率过低
+  dimension: 财务
+  severity: 中
+  status: active
+  condition:
+    type: threshold
+    metric: 毛利率
+    op: <
+    value: 0.1
+  message: 毛利率低于 10%
+- id: R1008
+  name: ROE 偏低
+  dimension: 财务
+  severity: 低
+  status: active
+  condition:
+    type: threshold
+    metric: ROE
+    op: <
+    value: 0.05
+  message: ROE 低于 5%
+- id: R1011
+  name: 连续亏损预警
+  dimension: 财务
+  severity: 高
+  status: active
+  contribute_to_score: true
+  condition:
+    type: threshold
+    metric: 连续亏损年数
+    op: '>='
+    value: 2
+  message: 连续亏损年数≥2，触及 ST 风险警示代理条件（非监管原文）
+- id: R1012
+  name: 连续两年扣非净利为负
+  dimension: 财务
+  severity: 高
+  status: active
+  contribute_to_score: false
+  condition:
+    type: event
+    event: 连续两年扣非净利为负
+  message: 连续两年扣非净利为负（ST 实施代理标签，公开可核验财务口径）
+- id: R1009
+  name: 流动比率关注带
+  dimension: 财务
+  severity: 低
+  status: active
+  condition:
+    type: threshold
+    metric: 流动比率
+    op: <
+    value: 1.2
+  message: 流动比率低于 1.2，建议关注
+- id: R1013
+  name: 资不抵债
+  dimension: 财务
+  severity: 高
+  status: active
+  contribute_to_score: true
+  condition:
+    type: threshold
+    metric: 资产负债率
+    op: '>'
+    value: 1.0
+  message: 资产负债率超过 100%，净资产为负（资不抵债）
+- id: R1010
+  name: 资产负债率关注带
+  dimension: 财务
+  severity: 中
+  status: active
+  condition:
+    type: threshold
+    metric: 资产负债率
+    op: '>'
+    value: 0.6
+  message: 资产负债率超过 60%
+- id: R2001
+  name: 客户集中度过高
+  dimension: 经营
+  severity: 高
+  status: active
+  condition:
+    type: threshold
+    metric: 客户集中度
+    op: '>'
+    value: 0.5
+  message: 前五大客户收入占比超过 50%
+- id: R2002
+  name: 供应商集中度过高
+  dimension: 经营
+  severity: 中
+  status: active
+  condition:
+    type: threshold
+    metric: 供应商集中度
+    op: '>'
+    value: 0.6
+  message: 前五大供应商采购占比超过 60%
+- id: R2003
+  name: 产能利用率不足
+  dimension: 经营
+  severity: 中
+  status: active
+  condition:
+    type: threshold
+    metric: 产能利用率
+    op: <
+    value: 0.6
+  message: 产能利用率低于 60%
+- id: R3001
+  name: 行业景气下行
+  dimension: 行业
+  severity: 中
+  status: active
+  condition:
+    type: threshold
+    metric: 行业营收增速
+    op: <
+    value: 0.0
+  message: 行业营收增速为负
+- id: R4001
+  name: 失信被执行
+  dimension: 舆情
+  severity: 高
+  status: active
+  condition:
+    type: event
+    event: 失信被执行
+  message: 命中失信被执行记录
+  contribute_to_score: true
+- id: R4002
+  name: 重大诉讼
+  dimension: 舆情
+  severity: 高
+  status: active
+  condition:
+    type: event
+    event: 重大诉讼
+  message: 存在重大诉讼风险事件
+- id: R4003
+  name: 行政处罚
+  dimension: 舆情
+  severity: 中
+  status: active
+  condition:
+    type: event
+    event: 行政处罚
+  message: 近期存在行政处罚
+- id: R5001
+  name: 担保链过深
+  dimension: 关联
+  severity: 高
+  status: active
+  condition:
+    type: threshold
+    metric: 担保链层级
+    op: '>'
+    value: 3
+  message: 担保链穿透超过 3 层
+- id: R5002
+  name: 对外担保比例过高
+  dimension: 关联
+  severity: 高
+  status: active
+  condition:
+    type: threshold
+    metric: 对外担保比例
+    op: '>'
+    value: 0.5
+  message: 对外担保余额/净资产超过 50%
+- id: R5003
+  name: 关联交易占比过高
+  dimension: 关联
+  severity: 中
+  status: active
+  condition:
+    type: threshold
+    metric: 关联交易占比
+    op: '>'
+    value: 0.2
+  message: 关联交易占比超过 20%
+- id: R5004
+  name: 股权质押过高
+  dimension: 关联
+  severity: 中
+  status: active
+  condition:
+    type: threshold
+    metric: 股权质押率
+    op: '>'
+    value: 0.7
+  message: 大股东质押率超过 70%
+- id: R9001
+  name: 商誉试点规则
+  dimension: 财务
+  severity: 低
+  status: pilot
+  condition:
+    type: threshold
+    metric: 商誉占比
+    op: '>'
+    value: 0.2
+  message: （pilot）商誉占比超过 20%，仅提示不计分
+- id: R1020
+  name: Altman Z-Score 破产预警区
+  dimension: 财务
+  severity: 高
+  status: active
+  contribute_to_score: true
+  condition:
+    type: threshold
+    metric: Altman_Z值
+    op: <
+    value: 1.81
+  message: Altman Z-Score < 1.81，落入破产预警区（原始上市制造业 5 变量模型口径）
+- id: R1021
+  name: Altman Z-Score 灰色区
+  dimension: 财务
+  severity: 中
+  status: active
+  contribute_to_score: true
+  condition:
+    type: composite
+    all:
+    - metric: Altman_Z值
+      op: '>='
+      value: 1.81
+    - metric: Altman_Z值
+      op: <
+      value: 2.99
+  message: Altman Z-Score 处于 1.81–2.99 灰色区，破产预警临界（需结合定性复核）
 
-  - id: R1002
-    name: 速动比率预警
-    dimension: 财务
-    severity: 中
-    status: active
-    condition: { type: threshold, metric: 速动比率, op: "<", value: 0.8 }
-    message: 速动比率偏低
+- id: R1014
+  name: Altman Z'-Score 破产区
+  dimension: 财务
+  severity: 高
+  status: active
+  contribute_to_score: true
+  condition: { type: threshold, metric: "Z值(Altman)", op: "<", value: 1.23 }
+  message: Altman Z'-Score 低于 1.23（破产预警区），模型提示较高违约概率
 
-  - id: R1003
-    name: 杠杆偏高
-    dimension: 财务
-    severity: 高
-    status: active
-    condition: { type: threshold, metric: 资产负债率, op: ">", value: 0.7 }
-    message: 资产负债率超过 70%
+- id: R1016
+  name: 利息保障倍数不足
+  dimension: 财务
+  severity: 高
+  status: active
+  contribute_to_score: true
+  condition: { type: threshold, metric: "利息保障倍数", op: "<", value: 1.0 }
+  message: 利息保障倍数低于 1.0，息税前利润不足以覆盖利息支出
 
-  - id: R1004
-    name: 利息保障不足
-    dimension: 财务
-    severity: 高
-    status: active
-    condition: { type: threshold, metric: 利息保障倍数, op: "<", value: 2.0 }
-    message: 利息保障倍数低于 2
+- id: R1017
+  name: 流动比率偏低
+  dimension: 财务
+  severity: 中
+  status: active
+  contribute_to_score: true
+  condition: { type: threshold, metric: "流动比率", op: "<", value: 1.0 }
+  message: 流动比率低于 1.0，短期偿债缓冲不足（银行授信观察线）
 
-  - id: R1005
-    name: 盈利质量存疑
-    dimension: 财务
-    severity: 高
-    status: active
-    condition: { type: threshold, metric: 经营现金流/净利润, op: "<", value: 0.0 }
-    message: 经营现金流相对净利润偏弱（模板简化：比值<0）
+- id: R1018
+  name: 资产负债率超限（授信压缩线）
+  dimension: 财务
+  severity: 高
+  status: active
+  contribute_to_score: true
+  condition: { type: threshold, metric: "资产负债率", op: ">", value: 0.85 }
+  message: 资产负债率高于 85%，触及银行授信压缩线
 
-  - id: R1006
-    name: 商誉占比过高
-    dimension: 财务
-    severity: 中
-    status: active
-    condition: { type: threshold, metric: 商誉占比, op: ">", value: 0.3 }
-    message: 商誉占净资产超过 30%
-
-  - id: R1007
-    name: 毛利率过低
-    dimension: 财务
-    severity: 中
-    status: active
-    condition: { type: threshold, metric: 毛利率, op: "<", value: 0.1 }
-    message: 毛利率低于 10%
-
-  - id: R1008
-    name: ROE 偏低
-    dimension: 财务
-    severity: 低
-    status: active
-    condition: { type: threshold, metric: ROE, op: "<", value: 0.05 }
-    message: ROE 低于 5%
-
-  - id: R1011
-    name: 连续亏损预警
-    dimension: 财务
-    severity: 高
-    status: active
-    contribute_to_score: true
-    condition: { type: threshold, metric: 连续亏损年数, op: ">=", value: 2 }
-    message: 连续亏损年数≥2，触及 ST 风险警示代理条件（非监管原文）
-
-  - id: R1012
-    name: 连续两年扣非净利为负
-    dimension: 财务
-    severity: 高
-    status: active
-    # 与 R1011 互为证据口径；事件命中不计双份分，由 early_warning 加分统一处理
-    contribute_to_score: false
-    condition: { type: event, event: 连续两年扣非净利为负 }
-    message: 连续两年扣非净利为负（ST 实施代理标签，公开可核验财务口径）
-
-  - id: R1009
-    name: 流动比率关注带
-    dimension: 财务
-    severity: 低
-    status: active
-    condition: { type: threshold, metric: 流动比率, op: "<", value: 1.2 }
-    message: 流动比率低于 1.2，建议关注
-
-  - id: R1010
-    name: 资产负债率关注带
-    dimension: 财务
-    severity: 中
-    status: active
-    condition: { type: threshold, metric: 资产负债率, op: ">", value: 0.6 }
-    message: 资产负债率超过 60%
-
-  - id: R2001
-    name: 客户集中度过高
-    dimension: 经营
-    severity: 高
-    status: active
-    condition: { type: threshold, metric: 客户集中度, op: ">", value: 0.5 }
-    message: 前五大客户收入占比超过 50%
-
-  - id: R2002
-    name: 供应商集中度过高
-    dimension: 经营
-    severity: 中
-    status: active
-    condition: { type: threshold, metric: 供应商集中度, op: ">", value: 0.6 }
-    message: 前五大供应商采购占比超过 60%
-
-  - id: R2003
-    name: 产能利用率不足
-    dimension: 经营
-    severity: 中
-    status: active
-    condition: { type: threshold, metric: 产能利用率, op: "<", value: 0.6 }
-    message: 产能利用率低于 60%
-
-  - id: R3001
-    name: 行业景气下行
-    dimension: 行业
-    severity: 中
-    status: active
-    condition: { type: threshold, metric: 行业营收增速, op: "<", value: 0.0 }
-    message: 行业营收增速为负
-
-  - id: R4001
-    name: 失信被执行
-    dimension: 舆情
-    severity: 高
-    status: active
-    condition: { type: event, event: 失信被执行 }
-    message: 命中失信被执行记录
-    contribute_to_score: true
-
-  - id: R4002
-    name: 重大诉讼
-    dimension: 舆情
-    severity: 高
-    status: active
-    condition: { type: event, event: 重大诉讼 }
-    message: 存在重大诉讼风险事件
-
-  - id: R4003
-    name: 行政处罚
-    dimension: 舆情
-    severity: 中
-    status: active
-    condition: { type: event, event: 行政处罚 }
-    message: 近期存在行政处罚
-
-  - id: R5001
-    name: 担保链过深
-    dimension: 关联
-    severity: 高
-    status: active
-    condition: { type: threshold, metric: 担保链层级, op: ">", value: 3 }
-    message: 担保链穿透超过 3 层
-
-  - id: R5002
-    name: 对外担保比例过高
-    dimension: 关联
-    severity: 高
-    status: active
-    condition: { type: threshold, metric: 对外担保比例, op: ">", value: 0.5 }
-    message: 对外担保余额/净资产超过 50%
-
-  - id: R5003
-    name: 关联交易占比过高
-    dimension: 关联
-    severity: 中
-    status: active
-    condition: { type: threshold, metric: 关联交易占比, op: ">", value: 0.2 }
-    message: 关联交易占比超过 20%
-
-  - id: R5004
-    name: 股权质押过高
-    dimension: 关联
-    severity: 中
-    status: active
-    condition: { type: threshold, metric: 股权质押率, op: ">", value: 0.7 }
-    message: 大股东质押率超过 70%
-
-  - id: R9001
-    name: 商誉试点规则
-    dimension: 财务
-    severity: 低
-    status: pilot
-    condition: { type: threshold, metric: 商誉占比, op: ">", value: 0.2 }
-    message: （pilot）商誉占比超过 20%，仅提示不计分
+- id: R1019
+  name: 连续亏损三年及以上
+  dimension: 财务
+  severity: 高
+  status: active
+  contribute_to_score: true
+  condition: { type: threshold, metric: "连续亏损年数", op: ">", value: 2 }
+  message: 连续三年及以上亏损，持续经营能力存疑

@@ -348,6 +348,26 @@ export function createCompany(name: string, industry = "") {
   });
 }
 
+/** 工作台演示企业（4 家真实 A 股上市公司，AkShare 公开财报） */
+export const DemoCompanySchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  name: z.string(),
+  industry: z.string(),
+  kind: z.string(),
+  note: z.string(),
+  period: z.string().nullable(),
+  metrics: z.record(z.number()),
+  grade: z.string().nullable(),
+  altman_z: z.number().nullable(),
+  altman_zone: z.string().nullable(),
+});
+export type DemoCompany = z.infer<typeof DemoCompanySchema>;
+
+export function fetchDemoCompanies() {
+  return getEnvelope("/v1/demo/companies", z.array(DemoCompanySchema));
+}
+
 export function postAnalyze(companyId: string, intent = "analyze_risk", includeStress = true) {
   return getEnvelope("/v1/analyze", AnalyzeSchema, {
     method: "POST",
