@@ -136,8 +136,8 @@ git checkout -- <file>    # 丢弃单文件改动
 | 🟡 P1 | **SWAS 续费** | 与 RedTrip 共用，到期前两台服务全停（HANDOVER 原记 2026-09-22，请向阿里云后台核对实际到期日） |
 | 🟡 P1 | **ICP 备案 / 域名合规** | `sy-realm.ltd` 未备案，当前依赖 Cloudflare 隧道，建议推进备案 |
 | 🟢 P1 | **微信小程序已上传** | 私钥已于 2026-09-01 放到 `apps/miniprogram/private.wx18d6236028c29ea9.key`（gitignore），`node upload_mp.mjs` 上传 **v1.0.1** 成功（exit=0）。**运行时仍需在 MP 后台配 `request` 合法域名白名单 `sy-realm.ltd`**，并核对 `src/utils/config.js` 中 `https://sy-realm.ltd/bizatlas/v1` 解析到 `139.224.163.203:8080` 且证书有效 |
-| 🟢 P2 | **`custom_pilot.yaml` 重复规则数据治理** | HEAD 已含 89 条重复的「流动比率<0.9」pilot 规则（历史 seed 冗余），属数据卫生问题，可单独做去重，不阻塞功能 |
-| 🟢 P2 | **演示数据清理（若坚持）** | 三 fixture 是测试基础设施，删除需同步改造 36 个依赖测试；建议保留，改清理服务器 `companies` 表里测试产生的企业 |
+| ✅ 已完成 | ~~`custom_pilot.yaml` 重复规则数据治理~~ | **2026-09-03 已治理**：按语义签名去重，51 条 → **3 条**（删 48 条重复的「流动比率<0.9」），`rules_loaded` 92 → **47**；测试耗时 18.7s → 12.4s。回滚文件 `content/rules/custom_pilot.yaml.bak20260903` |
+| ✅ 已完成 | ~~演示数据清理~~ | **2026-09-03 已清理**：删除 **107 家测试企业** + 895 行关联数据（companies 112 → 5，保留腾讯/阿里巴巴/宏图建材等真实数据）。fixture 三件套按建议**保留** |
 
 ---
 
@@ -159,7 +159,7 @@ git checkout -- <file>    # 丢弃单文件改动
 - [ ] `QICHACHA_SECRET` 已补配并验证企查查数据源
 - [ ] 泄露密钥已轮换
 - [ ] GitHub SSH Deploy Key 推送机制已知（`:443` 限流，走 `:22`）
-- [ ] `git log` 近期提交链已知（CI 绿基线 = `bfcbbe8`）
+- [x] `git log` 近期提交链已知（CI 绿基线 = `65997fd`，含 2026-09-03 测试隔离 + 规则治理）
 - [ ] `POST /v1/analyze` fixture 链路已实跑通过（healthy/risky/defaulted）
 - [x] 微信小程序 v1.0.1 已上传（私钥就位，`node upload_mp.mjs` 成功）
 - [x] MP 后台 `request` 合法域名白名单 `sy-realm.ltd` 已配（运行时前置，否则 `wx.request` 不通）
@@ -167,7 +167,74 @@ git checkout -- <file>    # 丢弃单文件改动
 
 ---
 
-*最后更新：2026-09-01 · 199 passed · P0/P1/P2 落地 · CI 绿 · 小程序 v1.0.1 已上传*
+*最后更新：2026-09-03 · 208 passed · 部署同步已修复 · 测试隔离已落地 · 规则与数据已治理*
+
+---
+
+## 12. 2026-09-03 运维更新记录
+
+> 主动体检后修复 2 个实锤问题，并清理历史堆积。全程走「备份 → 变更 → 健康检查 → 保留回滚」。
+
+### 12.1 部署与代码不同步（P0，已修复）
+
+| 时间 | 事件 |
+|---|---|
+| 09-01 13:11:01 | `bizatlas` 服务启动 |
+| 09-01 13:22:25 | `8156290` P0/P1/P2 优化落地（1308 行）— **未加载** |
+| 09-01 13:38:48 | `6896412` P2 收尾：票据 OCR + MCP + 效果看板（395 行）— **未加载** |
+| 09-03 13:44 | 体检发现 `/v1/analytics/feedback/dashboard` → **404** |
+
+**根因**：进程启动时两次提交尚未落地，且无 reload 机制。
+**修复**：`systemctl restart bizatlas`。
+**验证**：`dashboard` 404 → **200**；`rules_loaded` 90 → 92；外网 4 端点全 200；零错误日志。
+
+### 12.2 测试污染生产库与规则文件（P1，已根治）
+
+**根因**：`tests/conftest.py` 只隔离了 SMTP/邮箱验证/天眼查 Token，**未隔离 DB 与 rules 目录**；而 `Settings.bizatlas_db_path` 默认指向生产库 `data/bizatlas.sqlite`，`bizatlas_rules_dir` 指向受版本控制的 `content/rules`。
+
+**后果**：每跑一次 pytest → 生产库灌入「离线测试企业 / 单测上传企业 / EvCo / E2E / CiteCo」；`custom_pilot.yaml` 被反复 append 同一条重复 pilot 规则，工作区永远不干净。
+
+**修复**（`65997fd`）：会话级重定向 `BIZATLAS_DB_PATH` / `UPLOAD_DIR` / `EXPORT_DIR` / `RULES_DIR` 到临时目录；rules 先 `copytree` 保证 `rules_loaded` 断言成立；`atexit` 自动清理。
+
+**验证**：208 passed / 12.4s；跑完 `git status` 干净、生产库 `companies` 保持 5、`/tmp` 零残留。
+
+### 12.3 数据与文件清理
+
+| 动作 | 结果 |
+|---|---|
+| 测试企业 | 删 107 家 + 895 行关联；`companies` 112 → **5** |
+| `custom_pilot.yaml` | 51 条 → **3 条**（删 48 条重复） |
+| 前端残留 bundle | 移走 13 个，释放 3.3M |
+| 根目录垃圾 | 移走 19 个临时文件（292 KB） |
+| 数据库 | VACUUM，30M → 29M |
+
+### 12.4 当前运行状态
+
+```
+service: bizatlas-api v0.1.0 | mode: snapshot
+db_ok: True | rules_loaded: 47 | llm: GLM-5.2 | 内存 ~61 MB
+
+  [FAIL] qichacha       missing env: QICHACHA_SECRET   ← 唯一待办
+  [OK  ] tianyancha / tushare / akshare_news / cninfo / upload
+```
+
+### 12.5 回滚路径
+
+```bash
+cp /opt/bizatlas/data/bizatlas.sqlite.bak-preclean-20260903 data/bizatlas.sqlite   # 数据
+cp -r /opt/bizatlas_backup_20260903/web_dist/* /www/wwwroot/sy-realm.ltd/bizatlas/ # 前端
+cp content/rules/custom_pilot.yaml.bak20260903 content/rules/custom_pilot.yaml     # 规则
+git revert 65997fd                                                                  # 代码
+ls /opt/bizatlas_trash_20260903/{root,web_assets}/                                  # 回收区
+```
+
+### 12.6 剩余待办
+
+| 优先级 | 事项 | 阻塞于 |
+|---|---|---|
+| 🟡 P1 | 补 `QICHACHA_SECRET` | 需提供企查查开放平台 appsecret（与 `QICHACHA_TOKEN` 成对） |
+| 🟢 P2 | 后端新 API 缺前端入口 | 效果度量看板 / 反馈埋点 / 担保链传染 / `/v1/metrics` / MCP / 票据 OCR，后端均已上线但无 UI |
+
 ## 产品优化路线执行记录（P0/P1/P2，2026-09-01）
 
 承接《竞品扫描与产品路线》，本批次把"进门门槛 → 差异化加深 → 规模化前置"三级清单全部落到代码、测试、部署与文档，并推 GitHub 触发 CI。
