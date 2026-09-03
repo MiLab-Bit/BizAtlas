@@ -14,6 +14,7 @@ import {
   createCompany,
   createReport,
   fetchCompanies,
+  fetchDemoCompanies,
   fetchFixtures,
   postAnalyze,
   startDueDiligence,
@@ -38,6 +39,19 @@ import {
   TabsTrigger,
 } from "@/shared/ui";
 
+const pctFmt = (v?: number | null) =>
+  v == null ? "—" : `${(v * 100).toFixed(2)}%`;
+const numFmt = (v?: number | null) =>
+  v == null ? "—" : v.toFixed(2);
+const zoneCls = (z?: string | null) =>
+  z === "安全区"
+    ? "rounded px-1.5 py-0.5 text-[11px] font-semibold bg-emerald-100 text-emerald-700"
+    : z === "灰色区"
+      ? "rounded px-1.5 py-0.5 text-[11px] font-semibold bg-amber-100 text-amber-700"
+      : z === "破产区"
+        ? "rounded px-1.5 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700"
+        : "rounded px-1.5 py-0.5 text-[11px] font-semibold bg-muted text-muted-foreground";
+
 export function WorkbenchPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -55,6 +69,7 @@ export function WorkbenchPage() {
 
   const fixtures = useQuery({ queryKey: ["fixtures"], queryFn: fetchFixtures });
   const companies = useQuery({ queryKey: ["companies"], queryFn: fetchCompanies });
+  const demo = useQuery({ queryKey: ["demo-companies"], queryFn: fetchDemoCompanies });
 
   const analyze = useMutation({
     mutationFn: (id: string) => postAnalyze(id, "analyze_risk", true),
@@ -191,6 +206,107 @@ export function WorkbenchPage() {
                 <ScanSearch />
                 {analyze.isPending ? "研判中…" : "帮我看风险"}
               </Button>
+            </div>
+
+            {/* 真实企业演示案例：4 家 A 股上市公司，AkShare 公开财报，供主办方快速浏览 */}
+            <div className="mt-5 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold">真实企业演示案例</p>
+                <p className="text-xs text-muted-foreground">
+                  AkShare 公开财报 · 报告期 {demo.data?.[0]?.period ?? "—"}
+                </p>
+              </div>
+              {demo.isError ? (
+                <p className="text-xs text-destructive">
+                  演示企业取数失败：
+                  {demo.error instanceof Error ? demo.error.message : String(demo.error)}
+                </p>
+              ) : null}
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {(demo.data ?? []).map((c) => {
+                  const mm = c.metrics ?? {};
+                  const isActive = analyze.variables === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      disabled={analyze.isPending}
+                      onClick={() => {
+                        setReportMd(null);
+                        setExportHint("");
+                        analyze.mutate(c.id);
+                      }}
+                      className={[
+                        "rounded-xl border bg-card p-3 text-left transition",
+                        "hover:border-primary hover:shadow-sm disabled:opacity-60",
+                        isActive
+                          ? "border-primary ring-1 ring-primary"
+                          : "border-border",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold">{c.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {c.code} · {c.industry}
+                          </p>
+                        </div>
+                        {c.grade ? <GradeBadge grade={c.grade} /> : null}
+                      </div>
+
+                      <p className="mt-2 inline-block rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                        {c.kind}
+                      </p>
+
+                      {/* 标准银行风控模型：Altman Z-Score（原始上市制造业 5 变量） */}
+                      <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-muted/60 px-2 py-1">
+                        <span className="text-[11px] text-muted-foreground">Altman Z-Score</span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="font-semibold tabular-nums">
+                            {c.altman_z != null ? c.altman_z.toFixed(2) : "—"}
+                          </span>
+                          {c.altman_zone ? (
+                            <span className={zoneCls(c.altman_zone)}>{c.altman_zone}</span>
+                          ) : null}
+                        </span>
+                      </div>
+
+                      <dl className="mt-2 space-y-1 text-xs">
+                        <div className="flex justify-between gap-2">
+                          <dt className="text-muted-foreground">资产负债率</dt>
+                          <dd className="font-medium tabular-nums">
+                            {pctFmt(mm["资产负债率"])}
+                          </dd>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <dt className="text-muted-foreground">流动比率</dt>
+                          <dd className="font-medium tabular-nums">
+                            {numFmt(mm["流动比率"])}
+                          </dd>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <dt className="text-muted-foreground">净利率</dt>
+                          <dd className="font-medium tabular-nums">
+                            {pctFmt(mm["净利率"])}
+                          </dd>
+                        </div>
+                        {mm["连续亏损年数"] ? (
+                          <div className="flex justify-between gap-2">
+                            <dt className="text-muted-foreground">连续亏损</dt>
+                            <dd className="font-medium tabular-nums text-destructive">
+                              {mm["连续亏损年数"]} 年
+                            </dd>
+                          </div>
+                        ) : null}
+                      </dl>
+
+                      <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+                        {c.note}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </TabsContent>
 
