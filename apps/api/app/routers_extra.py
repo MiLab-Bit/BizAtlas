@@ -7,22 +7,24 @@
 - GET  /v1/metrics                     Prometheus 文本指标
 - GET  /v1/companies/{id}/contagion    担保链违约传染推导
 - GET  /v1/demo/companies              工作台演示用：4 家不同类型真实 A 股上市公司
+- GET  /v1/risk/{company_id}           B-RCF v2.0.0 风控体系：综合分/主标尺/困境/行为/reason codes
 """
 from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from bizatlas.config import get_settings
-from bizatlas.contracts.models import Envelope
+from bizatlas.contracts.models import AnalyzeRequest, Envelope
 from bizatlas.kg.contagion import compute_contagion
 from bizatlas.observability.metrics import default_metrics
 from apps.api.auth_deps import get_principal
 from bizatlas.analytics import feedback as feedback_svc
 from bizatlas.data.db import get_connection
+from bizatlas.orchestrator.analyze import run_analyze
 
 router = APIRouter()
 
@@ -107,7 +109,7 @@ DEMO_COMPANIES = [
 
 # 卡片上展示的关键指标（顺序即展示顺序）
 DEMO_METRIC_KEYS = ["资产负债率", "流动比率", "速动比率", "净利率", "ROE", "毛利率",
-                 "连续亏损年数", "Altman_Z值"]
+                 "连续亏损年数", "Z值(Altman)"]
 
 
 def _altman_zone(z):
@@ -152,7 +154,7 @@ def demo_companies() -> Envelope[list]:
                     "SELECT grade FROM risk_scores WHERE company_id = ? "
                     "ORDER BY rowid DESC LIMIT 1", (cid,)
                 ).fetchone()
-                z = metrics.get("Altman_Z值")
+                z = metrics.get("Z值(Altman)")
                 out.append({
                     **meta,
                     "period": period,
@@ -166,3 +168,40 @@ def demo_companies() -> Envelope[list]:
     except Exception as exc:  # 演示端点不因数据异常拖垮工作台
         return Envelope(ok=False, data=[], error=f"演示企业取数失败: {exc}")
     return Envelope(ok=True, data=out, meta={"count": len(out), "degraded": False})
+
+
+@router.get("/v1/risk/{company_id}")
+def company_risk(
+    company_id: str,
+    fast: bool = True,
+    include_stress: bool = False,
+    include_kg: bool = False,
+) -> Envelope[dict]:
+    """B-RCF v2.0.0 风控体系：综合风险分 + 10 级银行主标尺 + 财务困境/商业行为明细 + FICO 式 reason codes。
+
+    复用 run_analyze（fast 路径跳过 LLM 润色，数字与决策不依赖 LLM），返回 risk 子块。
+    """
+    try:
+        req = AnalyzeRequest(
+            company_id=company_id,
+            intent="analyze_risk",
+            options={
+                "fast": fast,
+                "skip_polish": fast,
+                "include_stress": include_stress,
+                "include_kg": include_kg,
+            },
+        )
+        result = run_analyze(req)
+        return Envelope(
+            ok=True,
+            data={
+                "risk": result.get("risk", {}),
+                "company": result.get("company"),
+            },
+            meta={"degraded": False},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"风控计算失败: {exc}")

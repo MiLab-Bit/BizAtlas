@@ -290,7 +290,7 @@ export type PipelineStreamEvent =
       pipeline_status: string;
     };
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+const API_BASE = import.meta.env.VITE_API_BASE ?? import.meta.env.BASE_URL.replace(/\/+$/, "");
 
 function bearerHeader(): Record<string, string> {
   const t = typeof localStorage !== "undefined" ? localStorage.getItem("bizatlas_access_token") : null;
@@ -331,6 +331,11 @@ export async function getEnvelope<S extends z.ZodTypeAny>(
 export function fetchHealth() {
   return getEnvelope("/v1/health", HealthSchema);
 }
+
+export async function fetchRisk(companyId: string) {
+  return getEnvelope(`/v1/risk/${encodeURIComponent(companyId)}?fast=true`, z.record(z.unknown()));
+}
+
 
 export function fetchFixtures() {
   return getEnvelope("/v1/fixtures", z.array(z.string()));

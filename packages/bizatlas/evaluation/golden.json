@@ -1,5 +1,5 @@
 {
-  "scoring_version": "1.1.0",
+  "scoring_version": "2.0.1",
   "fixtures": {
     "healthy": {
       "grade": "GREEN",
@@ -35,5 +35,6 @@
       }
     }
   },
-  "_rebaseline_note": "v1.1.0 定版：risky 因 R1011/R1012 + early_warning 抬分政策由 RED(78.2) 升为 BLACK(96.2)。该 fixture 同时具备 重大诉讼/行政处罚/连续两年扣非净利为负/股权质押率 0.72/担保链层级 4，属重度困境主体，BLACK 与审批直觉一致。healthy/defaulted 零漂移。定版依据见 tests/test_golden_regression.py 的精确回归断言。"
+  "_rebaseline_note": "v1.1.0 定版：risky 因 R1011/R1012 + early_warning 抬分政策由 RED(78.2) 升为 BLACK(96.2)。该 fixture 同时具备 重大诉讼/行政处罚/连续两年扣非净利为负/股权质押率 0.72/担保链层级 4，属重度困境主体，BLACK 与审批直觉一致。healthy/defaulted 零漂移。定版依据见 tests/test_golden_regression.py 的精确回归断言。",
+  "_rebaseline_note_v201": "v2.0.1 定版：融合层改为「规则分基准 + 显著劣化才上调（只升不降）」，困境层 PD 经 severity_from_pd 在对数几率尺度统一到 0-100 严重度，数据缺口（PD 缺失 / 行为层已知维度 <50%）不参与融合。3 个 fixture 均无原始报表科目（只有比率指标），困境层判为数据缺口，因此基线值与 v1.1.0 完全一致（healthy GREEN 0.0 / risky BLACK 96.2 / defaulted BLACK 76.1）——这正是修复目标：不得用数据缺口稀释规则分。v2.0.0 曾因把 pd=None 当作风险 0 参与加权，把 risky 稀释成 ORANGE 54.1。"
 }

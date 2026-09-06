@@ -14,11 +14,12 @@ import {
   Bot,
   KeyRound,
 } from "lucide-react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { fetchHealth } from "@/shared/lib/api";
 import { fetchMe, getStoredUser, logout, type AuthUser } from "@/shared/lib/auth";
 import { cn } from "@/shared/lib/cn";
 import { StatusChip } from "@/shared/ui";
+import { PageErrorBoundary } from "@/shared/ui/error-boundary";
 
 const NAV = [
   ["/", "背调工作台", Search, "输入企业名，AI 对话式背调", true],
@@ -29,12 +30,14 @@ const NAV = [
   ["/engineering", "工程能力", Bot, "Agent 编排与技术架构说明", false],
   ["/credit-decision", "贷前审批", Scale, "授信准入决策卡与额度建议", false],
   ["/validation", "验证与合规", Database, "回溯 AUC 与数据授权对账", false],
+  ["/risk", "风控体系", Shield, "银行式风控：主标尺/困境/行为/reason codes", false],
   ["/model-config", "模型配置", KeyRound, "配置你自己的大模型供应商密钥", false],
 ] as const;
 
 export function Shell() {
   const health = useQuery({ queryKey: ["health"], queryFn: fetchHealth, retry: 1 });
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState<AuthUser | null>(getStoredUser());
   const AUTH_DISABLED = import.meta.env.VITE_AUTH_DISABLED === "true";
 
@@ -218,7 +221,11 @@ export function Shell() {
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-        <Outlet />
+        {/* 页面级错误边界：任一页面崩溃时只降级该页，保留左侧导航可切页自救。
+            此前无边界，单页报错会让整棵 React 树卸载 → 全站白屏。 */}
+        <PageErrorBoundary resetKey={location.pathname}>
+          <Outlet />
+        </PageErrorBoundary>
       </main>
     </div>
   );

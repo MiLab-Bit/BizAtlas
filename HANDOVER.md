@@ -258,3 +258,103 @@ ls /opt/bizatlas_trash_20260903/{root,web_assets}/                              
 - 已 commit 并 push `origin/master`，CI 绿。
 
 ---
+
+
+## 13. 2026-09-03（续）背调工作台演示 + 标准风控模型填充
+
+> 承接 12 节「真实企业 demo」需求：从行业 Know-how 出发，用标准银行风控模型
+> 填充规则集，并把 4 家 demo 企业的风险区分度做出来。
+
+### 13.1 根因：原演示区分度不足
+
+真实企业只有财务维度数据，而评分引擎财务维贡献封顶 30 分（100×0.30），
+故纯财务企业分数结构性卡在 ORANGE/48；万科（负债率 77.5%）与华夏幸福
+（103.8% 资不抵债）同分，主办方无法直观区分。
+
+### 13.2 填充：Altman Z-Score（银行信贷标准破产预警模型）
+
+- 原始上市制造业 5 变量：Z = 1.2X1+1.4X2+3.3X3+0.6X4+1.0X5
+  X1=营运资金/总资产, X2=留存收益/总资产, X3=EBIT/总资产, X4=市值/总负债, X5=营收/总资产
+- 区带：Z>2.99 安全｜1.81≤Z<2.99 灰色｜Z<1.81 破产预警
+- 市值=最新收盘价×股本(面值1) 反推；留存收益=归母权益−股本−资本公积−盈余公积
+  −专项储备−一般风险准备−少数股东权益−其他权益（会计恒等式，零编造）
+- 新增规则（仅挂在 demo 独有指标 Altman_Z值，fixture 不受影响）：
+  - R1020 Altman Z-Score 破产预警区（Z<1.81，高）
+  - R1021 Altman Z-Score 灰色区（1.81≤Z<2.99，中，composite 区间）
+- 保留 R1013 资不抵债红线（华夏幸福唯一命中）
+
+### 13.3 实测梯度（真实公开财报，报告期 2026-06-30）
+
+| 企业 | 类型 | 引擎评级 | Altman Z | 标准区 | 关键事实 |
+|---|---|---|---|---|---|
+| 贵州茅台 | 优质低杠杆 | GREEN | 23.36 | 安全区 | 负债率 15.2% |
+| 比亚迪 | 高杠杆扩张 | YELLOW | 1.27 | 破产区 | 负债率 71.0%（高杠杆致 Z 偏低） |
+| 万科A | 承压亏损 | ORANGE | −0.06 | 破产区 | 负债率 77.5%，连续亏损 2 年 |
+| 华夏幸福 | 资不抵债 | ORANGE | 0.05 | 破产区 | 负债率 103.8%，连续亏损 3 年，净资产为负 |
+
+### 13.4 落库与展示
+
+- `scripts/seed_demo_companies.py`：AkShare 公开财报（财务分析指标+东方财富三大
+  报表+新浪日线），幂等、可溯源；计算并落库 Altman_Z值
+- 后端 `/v1/demo/companies`：新增返回 `altman_z` / `altman_zone`
+- 前端 `WorkbenchPage` 卡片：突出展示 Altman Z-Score（安全/灰色/破产区带配色）
+  + 引擎评级 + 关键财务比率；`DemoCompanySchema` 补字段（zod 原会丢弃多余字段）
+
+### 13.5 构建与部署说明（重要）
+
+- **源机 139.224.163.203 仅 896MB 内存，vite 生产构建触发 OOM（exit 137）**，
+  无法在本机构建。改为：源码 rsync 至沙箱（123GB）→ npmmirror 装依赖 →
+  `pnpm build` 成功（12s）→ dist 回传 → 部署至 `/www/wwwroot/sy-realm.ltd/bizatlas/`
+  → `nginx -s reload`。旧前端备份 `/opt/bizatlas_web_backup_20260903b`。
+- 若后续需在本机改前端，请先在内存更大的环境构建，或为本机扩容/加 swap（cgroup
+  内存受限，单纯加 swap 文件无效）。
+
+### 13.6 验证
+
+- `pytest` 208 passed / 13.2s（与改造前一致，fixture 零回归）
+- 外网 `/v1/demo/companies` 返回 4 家 + Z 值 + 区带，全绿
+- 部署后外网 bundle 含 `Altman Z-Score` 代码
+
+### 13.7 回滚路径
+
+```bash
+cp /opt/bizatlas_web_backup_20260903b/* /www/wwwroot/sy-realm.ltd/bizatlas/   # 前端
+git revert 541e2f7                                                          # 代码
+cp content/rules/seed_financial.yaml.bak20260903b content/rules/seed_financial.yaml  # 规则
+```
+
+
+---
+
+## 13. 2026-09-06 部署断层修复：B-RCF v2.0.1（融合层量纲 + CI 门禁）
+
+**背景：这批更新一直没真正上线。** 9-05 的 B-RCF v2.0.0 改造（前端风控体系页
+`/risk` + 后端融合层 + `GET /v1/risk/{company_id}`）只存在于工作区：
+- 服务进程仍是 **2026-09-03 17:14** 启动的旧代码，改的代码一行没生效；
+- 前端产物 mtime 停在 **Sep 3 17:17**，新页面不在包里；
+- GitHub CI 自 9-01 05:38（`6896412`）起**连续 4 个 run 失败**，卡在 coverage gate。
+
+**两个硬阻塞与根因**
+
+| 阻塞 | 根因 |
+|---|---|
+| `test_golden_scores_exact` 失败：risky `BLACK 96.2 → ORANGE 54.1` | `compute_distress` 在 Ohlson/Altman 均无法计算时（fixture 只有比率指标、缺原始报表科目）仍因 Beneish 占位判定 `available=True`；`enrich_risk` 按 `(pd or 0.0)*100` 把 `pd=None` 当成「风险 0」参与加权，把 96.2 稀释到 48.1——**把未知当安全** |
+| 覆盖率 74% < 75% 门禁 | 新增 `distress/behavioral/reason_codes` 三个模块零专属测试（`distress.py` 仅 51%） |
+
+**修复**
+
+1. `risk/distress.py`：`available` 只认真正算出信号的模型，不可用模型不进 `models`；
+   新增 `_DIRECT_KEYS` 直通，修掉 Beneish 变量被静默丢弃、M-Score **永远算不出来**的缺陷。
+2. `risk/score.py`：新增 `severity_from_pd`（**对数几率尺度**把 PD 映射到 0-100 严重度，
+   PD 0.1%→0、1%→20.1、13%→43.5、95%→85.7），解决 PD 与严重度量纲不等价；
+   融合改为**银行 overlay 惯例**：以规则分为基准，其他层仅在显著劣于规则分时
+   向上叠加（只升不降），阈值 `UPLIFT_MIN_DELTA=10`、
+   `BEHAVIORAL_MIN_COMPLETENESS=0.5`，数据缺口不参与融合。
+3. 新增 `tests/test_risk_v2_fusion.py` / `test_risk_v2_api.py` / `test_risk_v2_extra.py`
+   共 28 例，锁住三条不变量：缺口不稀释、量纲可比且单调、只升不降。
+
+**结果**：`239 passed`；覆盖率 **75.55%**（门禁通过）；golden 三 fixture **零漂移**
+（healthy GREEN 0.0 / risky BLACK 96.2 / defaulted BLACK 76.1，主标尺 A / D / D）。
+
+**遗留**：`QICHACHA_SECRET` 仍缺失（health 报 `missing env`，企查查数据源不可用）；
+`custom_pilot.yaml` 又累积了重复的 pilot 规则（P2 数据卫生，不阻塞功能）。

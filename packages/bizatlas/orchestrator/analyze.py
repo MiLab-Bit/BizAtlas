@@ -15,7 +15,7 @@ from bizatlas.report.pdf_export import export_report_pdf
 from bizatlas.report.titles import status_label
 from bizatlas.risk.attribution import build_attribution
 from bizatlas.risk.conflicts import detect_conflicts
-from bizatlas.risk.score import score_risk
+from bizatlas.risk.score import enrich_risk, score_risk
 from bizatlas.risk.stress import run_stress
 from bizatlas.rules.engine import RuleEngine
 from bizatlas.contracts.integrity import sign
@@ -144,6 +144,8 @@ def run_analyze(req: AnalyzeRequest) -> dict[str, Any]:
         events=events,
         conflicts=len(conflicts),
     )
+    # B-RCF v2.0.0 融合层：规则严重度 + 财务困境 + 商业行为 → 综合分 / 主标尺 / reason codes
+    risk = enrich_risk(risk, metrics, events, hits=hits)
     risk_dump = risk.model_dump(mode="json")
     metrics_dump = [m.model_dump(mode="json") for m in metrics]
 

@@ -217,6 +217,16 @@ def init_db(db_path: str | None = None) -> Path:
             conn.execute("ALTER TABLE model_providers ADD COLUMN slot TEXT NOT NULL DEFAULT 'text'")
         except sqlite3.OperationalError:
             pass
+        # B-RCF v2.0.0 风控融合层字段（向后兼容：列已存在则静默跳过）
+        for col_sql in (
+            "ALTER TABLE risk_scores ADD COLUMN master_scale TEXT",
+            "ALTER TABLE risk_scores ADD COLUMN pd REAL",
+            "ALTER TABLE risk_scores ADD COLUMN reason_codes_json TEXT",
+        ):
+            try:
+                conn.execute(col_sql)
+            except sqlite3.OperationalError:
+                pass
         conn.commit()
     finally:
         conn.close()

@@ -5,7 +5,11 @@ from typing import Any
 
 from bizatlas.contracts.models import AnalyzeRequest
 from bizatlas.data import repo
-from bizatlas.data.providers_tianyancha import fetch_company_profile, tianyancha_configured
+from bizatlas.data.providers_tianyancha import (
+    _normalize_brand,
+    fetch_company_profile,
+    tianyancha_configured,
+)
 from bizatlas.ingest.fixtures import list_fixtures, load_fixture_company
 from bizatlas.llm.client import LLMUnavailable, chat_completion, llm_configured
 from bizatlas.llm.number_gate import collect_allowed_numbers, gate_or_fallback
@@ -46,11 +50,21 @@ def start_background_session(company_name: str, *, industry: str = "") -> dict[s
         try:
             tyc = fetch_company_profile(name)
             if tyc.get("ok") and (tyc.get("basic") or {}).get("name"):
-                display_name = str(tyc["basic"]["name"])
-                # update stored name to canonical
-                repo.ensure_company(company_id, display_name, industry or "")
+                canonical = str(tyc["basic"]["name"])
+                # 仅当天眼查返回的主体与用户输入同品牌核时才覆盖展示名/落库名。
+                # 否则一旦上游返回异常结构，会把「企业基本信息」这类数据源占位
+                # 名当成企业名写进 companies 表，永久污染数据。
+                if _normalize_brand(canonical) == _normalize_brand(name):
+                    display_name = canonical
+                    repo.ensure_company(company_id, display_name, industry or "")
         except Exception as exc:  # noqa: BLE001
-            tyc = {"ok": False, "source": "tianyancha", "message": str(exc)}
+            tyc = {
+                "ok": False,
+                "status": "error",
+                "source": "tianyancha",
+                "message": str(exc),
+                "errors": [str(exc)],
+            }
 
     if fixture_id:
         data = load_fixture_company(fixture_id)
@@ -84,7 +98,11 @@ def start_background_session(company_name: str, *, industry: str = "") -> dict[s
         "tianyancha": {
             "ok": bool(tyc and tyc.get("ok")),
             "configured": tianyancha_configured(),
+            # ok=已取到工商主体 | not_found=天眼查未收录 | error=凭证/网络/限流不可用
+            "status": (tyc or {}).get("status")
+            or ("not_found" if tianyancha_configured() else "error"),
             "message": (tyc or {}).get("message"),
+            "errors": (tyc or {}).get("errors") or [],
         },
         "summary": analyze_summary,
         "message": opener.get("answer"),
@@ -123,7 +141,12 @@ def background_reply(
         try:
             facts["tianyancha"] = fetch_company_profile(company_name)
         except Exception as exc:  # noqa: BLE001
-            facts["tianyancha"] = {"ok": False, "message": str(exc)}
+            facts["tianyancha"] = {
+                "ok": False,
+                "status": "error",
+                "message": str(exc),
+                "errors": [str(exc)],
+            }
 
     target = fixture_id or company_id
     if target:

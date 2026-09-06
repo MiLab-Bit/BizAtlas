@@ -161,32 +161,88 @@ def _normalize_brand(name: str) -> str:
     return s
 
 
-def _safe_search(keyword: str, limit: int = 5) -> list[dict[str, Any]]:
+# 天眼查在「查无此主体」时返回的空壳里，name 是数据源的中文显示名而非企业名。
+# 这些值绝不能被当成真实企业名称使用。
+_SOURCE_DISPLAY_LABELS = {
+    "企业基本信息", "工商信息", "基本信息", "企业信息", "企业工商",
+    "企业基础信息", "工商登记信息", "company base", "base",
+}
+
+
+def _is_empty_payload(payload: Any) -> bool:
+    """判定天眼查响应是否为『查无此主体』的空壳。
+
+    天眼查 MCP 在检索不到时仍返回 HTTP 200，结构形如：
+    {"_empty": true, "sources": {"base": {"empty": true, "status": "empty",
+     "items": [], "total": 0, "name": "企业基本信息"}}}
+    """
+    if not isinstance(payload, dict):
+        return True
+    if payload.get("_empty") is True:
+        return True
+    if payload.get("empty") is True and payload.get("status") == "empty":
+        return True
+    # total 存在且为 0 —— 明确无结果
+    total = payload.get("total")
+    if isinstance(total, int) and total == 0 and not payload.get("items"):
+        return True
+    return False
+
+
+def _safe_search(keyword: str, limit: int = 5, errors: list[str] | None = None) -> list[dict[str, Any]]:
+    """搜索企业，异常不静默吞掉——写入 errors 供上层判定可区分的三态。"""
     try:
         return search_companies(keyword, limit=limit)
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        if errors is not None:
+            errors.append(f"search_companies 失败（{keyword}）：{type(exc).__name__}: {exc}")
         return []
 
 
 def _extract_base(reg: Any) -> dict[str, Any] | None:
+    """从天眼查响应中提取有效工商主体；空壳/占位一律返回 None。"""
     if not isinstance(reg, dict):
         return None
+    # 第一重：整体空壳判定
+    if _is_empty_payload(reg):
+        return None
+
     sources = reg.get("sources") if isinstance(reg.get("sources"), dict) else None
+    base: dict[str, Any] | None = None
     if sources and isinstance(sources.get("base"), dict):
-        return sources["base"]
-    if reg.get("name"):
-        return reg
-    return None
+        base = sources["base"]
+    elif reg.get("name"):
+        base = reg
+    if not base:
+        return None
+
+    # 第二重：base 自身也可能是空壳（本次故障的根因所在）
+    if _is_empty_payload(base):
+        return None
+
+    name = str(base.get("name") or "").strip()
+    # 第三重：必须有企业名，且不能是数据源显示名
+    if not name or name in _SOURCE_DISPLAY_LABELS:
+        return None
+    # 第四重：至少要有一个实质性工商字段，否则视为无效占位
+    substance = ("creditCode", "taxNumber", "legalPersonName", "legalPerson",
+                 "regCapital", "regLocation", "estiblishTime", "establishTime")
+    if not any(base.get(k) for k in substance):
+        return None
+    return base
 
 
-def _safe_reg(search_key: str) -> Any:
+def _safe_reg(search_key: str, errors: list[str] | None = None) -> Any:
+    """拉取工商登记信息，异常写入 errors 而非静默返回 None。"""
     try:
         return _call_tool(
             "get_company_registration_info",
             {"searchKey": search_key},
             cli=("company", "registration-info"),
         )
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        if errors is not None:
+            errors.append(f"get_company_registration_info 失败（{search_key}）：{type(exc).__name__}: {exc}")
         return None
 
 
@@ -222,18 +278,29 @@ def fetch_company_profile(keyword: str) -> dict[str, Any]:
     profile: dict[str, Any] = {
         "source": "tianyancha_mcp",
         "query": name,
+        # 三态：ok=查到主体 | not_found=接口通但天眼查未收录 | error=接口/凭证不可用
+        "status": "error",
         "basic": None,
         "dishonest": None,
         "candidates": [],
+        "errors": [],
         "ok": False,
         "message": "",
     }
 
+    if not tianyancha_configured():
+        profile["status"] = "error"
+        profile["message"] = "天眼查凭证未配置"
+        profile["errors"].append("TIANYANCHA_TOKEN 为空，无法调用天眼查 MCP")
+        return profile
+
+    errors: list[str] = profile["errors"]
+
     brand = _normalize_brand(name)
     # 1) 原词搜索；2) 若归一名与原名不同，额外搜品牌核心并把结果前置（优先内地运营主体）
-    candidates = _safe_search(name)
+    candidates = _safe_search(name, errors=errors)
     if brand and brand != name:
-        candidates = _safe_search(brand) + candidates
+        candidates = _safe_search(brand, errors=errors) + candidates
     # 去重（按名称）并保留顺序
     seen: set[str] = set()
     uniq: list[dict[str, Any]] = []
@@ -265,7 +332,7 @@ def fetch_company_profile(keyword: str) -> dict[str, Any]:
         # 依次尝试排名靠前的候选，直到拿到字段较全的工商主体（稀疏兜底）
         for cand in _rank_candidates(name, candidates)[:3]:
             key = str(cand.get("name") or name)
-            reg = _safe_reg(key)
+            reg = _safe_reg(key, errors=errors)
             b = _extract_base(reg)
             if b:
                 base = b
@@ -274,12 +341,19 @@ def fetch_company_profile(keyword: str) -> dict[str, Any]:
                     break
     else:
         # 无候选：退化为直接按原名查询（保持旧行为）
-        reg = _safe_reg(name)
+        reg = _safe_reg(name, errors=errors)
         base = _extract_base(reg)
         search_key = name
 
     if not base:
-        profile["message"] = profile.get("message") or "未查到工商主体"
+        # 区分「接口不可用」与「天眼查确实没收录」——此前两者混为一谈
+        if errors and not candidates:
+            profile["status"] = "error"
+            profile["message"] = "天眼查接口调用失败（凭证/网络/限流）"
+        else:
+            profile["status"] = "not_found"
+            profile["message"] = "天眼查未收录该企业"
+        profile["ok"] = False
         return profile
 
     profile["basic"] = {
@@ -298,7 +372,11 @@ def fetch_company_profile(keyword: str) -> dict[str, Any]:
         "phoneNumber": base.get("phoneNumber"),
     }
     profile["ok"] = True
+    profile["status"] = "ok"
     profile["message"] = "ok"
+    # 拿到主体但检索过程有部分失败时，仍需让上层可见（不影响 ok）
+    if errors:
+        profile["message"] = f"ok（检索过程有 {len(errors)} 项次要失败）"
 
     try:
         dish = _call_tool(
@@ -338,5 +416,6 @@ def fetch_company_profile(keyword: str) -> dict[str, Any]:
         profile["dishonest"] = {"count": total if total is not None else len(items), "items": items}
     except Exception as exc:  # noqa: BLE001
         profile["dishonest"] = {"count": None, "items": [], "error": str(exc)}
+        profile["errors"].append(f"get_dishonest_info 失败：{type(exc).__name__}: {exc}")
 
     return profile
