@@ -181,22 +181,55 @@ def load_metrics(company_id: str) -> list[MetricValue]:
 
 
 def save_risk_score(company_id: str, risk_payload: dict[str, Any]) -> str:
-    rid = f"rs-{uuid.uuid4().hex[:10]}"
+    """持久化一次风控评分，返回评分行 id。
+
+    去重：若该企业最新一条评分的关键字段（grade / score / master_scale / pd / reason_codes）
+    与本次完全一致，则复用既有行、不新增记录。
+
+    原因：只读型接口（GET /v1/risk/{company_id} 等）每次调用都会跑一次完整研判，
+    不去重会让 risk_scores 随访问量线性膨胀——历史数据里单个企业一度堆积 4000+ 行，
+    直接把 SQLite 撑到 100MB 量级。分数真正发生变化时仍会正常写入新行，历史轨迹不丢。
+    """
+    grade = risk_payload.get("grade")
+    score = risk_payload.get("score")
+    master_scale = risk_payload.get("master_scale")
+    pd_value = risk_payload.get("pd")
+    reason_codes_json = (
+        json.dumps(risk_payload.get("modules", {}).get("reason_codes"), ensure_ascii=False)
+        if risk_payload.get("modules") else None
+    )
+    payload_json = json.dumps(risk_payload, ensure_ascii=False)
+
     conn = get_connection()
     try:
+        latest = conn.execute(
+            "SELECT id, grade, score, master_scale, pd, reason_codes_json FROM risk_scores "
+            "WHERE company_id = ? ORDER BY created_at DESC, id DESC LIMIT 1",
+            (company_id,),
+        ).fetchone()
+        # 同分复用：关键字段全等则视为重复计算，直接返回既有 id
+        if latest is not None and (
+            latest["grade"] == grade
+            and latest["score"] == score
+            and latest["master_scale"] == master_scale
+            and latest["pd"] == pd_value
+            and latest["reason_codes_json"] == reason_codes_json
+        ):
+            return str(latest["id"])
+
+        rid = f"rs-{uuid.uuid4().hex[:10]}"
         conn.execute(
             "INSERT INTO risk_scores (id, company_id, grade, score, master_scale, pd, reason_codes_json, payload_json, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 rid,
                 company_id,
-                risk_payload.get("grade"),
-                risk_payload.get("score"),
-                risk_payload.get("master_scale"),
-                risk_payload.get("pd"),
-                json.dumps(risk_payload.get("modules", {}).get("reason_codes"), ensure_ascii=False)
-                if risk_payload.get("modules") else None,
-                json.dumps(risk_payload, ensure_ascii=False),
+                grade,
+                score,
+                master_scale,
+                pd_value,
+                reason_codes_json,
+                payload_json,
                 _now(),
             ),
         )
