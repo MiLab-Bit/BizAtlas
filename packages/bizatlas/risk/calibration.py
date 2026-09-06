@@ -17,12 +17,17 @@ from dataclasses import dataclass, field
 from typing import Any
 
 # —— 文档化先验（logistic 锚点）——
-# 由 pd = 1 / (1 + exp(-(a + b * score)))，取 a=-3.0, b=0.045 给出：
-#   score=0    → PD≈2%   （极健康样本基线）
-#   score=50   → PD≈16%
-#   score=100  → PD≈80%  （接近重度/一票否决）
-CAL_A = -3.0
-CAL_B = 0.045
+# 由 pd = 1 / (1 + exp(-(a + b * score)))，取 a=-6.2, b=0.0795 给出：
+#   score=0    → PD≈0.20%  （优质客户基线，对应主标尺 A/AA）
+#   score=10   → PD≈0.46%  （BBB）
+#   score=40   → PD≈4.6%   （B）
+#   score=60   → PD≈19%    （CC）
+#   score=80   → PD≈54%    （C，临近否决）
+#   score=100  → PD≈85%    （D / 否决）
+# 锚点使 10 级主标尺 AAA..D 在整个 0-100 分区间均可达（低分对应低 PD）。
+# 锚点为专家先验，待真实违约标签后用 :func:`fit` 重新估计，绝不编造。
+CAL_A = -6.2
+CAL_B = 0.0795
 
 # LGD 先验（行业/担保结构敏感）。值为处置回收后的损失率，非编造，来自
 # 对中小企业信贷不良处置经验的保守估计，待真实回收数据校准。
@@ -42,7 +47,55 @@ class CalibrationResult:
     ead: float | None
     expected_loss: float | None
     calibrated_grade: str
+    master_scale: str | None = None
     rationale: list[str] = field(default_factory=list)
+
+
+# —— 银行内部评级主标尺（BBVA/IRB 风格，10 级，PD 为文档化先验）——
+# 对标 Basel II/III 内部评级 17 级主标尺的简化生产版。PD 区间取自行业通行先验，
+# **非本系统真实观测**；待积累违约标签后用 :func:`fit` 重新估计，绝不编造。
+MASTER_SCALE: list[tuple[str, float, float]] = [
+    # (等级, PD 下界, PD 上界)
+    ("AAA", 0.0, 0.0003),
+    ("AA", 0.0003, 0.001),
+    ("A", 0.001, 0.003),
+    ("BBB", 0.003, 0.01),
+    ("BB", 0.01, 0.03),
+    ("B", 0.03, 0.07),
+    ("CCC", 0.07, 0.15),
+    ("CC", 0.15, 0.30),
+    ("C", 0.30, 0.55),
+    ("D", 0.55, 1.01),
+]
+
+# GREEN..BLACK 五档作为 10 级主标尺的对外别名（兼容 credit/decision.py）
+GREEN_BLACK_ALIAS = {
+    "AAA": "GREEN",
+    "AA": "GREEN",
+    "A": "YELLOW",
+    "BBB": "YELLOW",
+    "BB": "ORANGE",
+    "B": "ORANGE",
+    "CCC": "RED",
+    "CC": "RED",
+    "C": "BLACK",
+    "D": "BLACK",
+}
+
+
+def master_scale_from_pd(pd: float) -> str:
+    """PD → 10 级银行主标尺等级（含否决置 D）。"""
+    if pd >= 0.55:
+        return "D"
+    for grade, lo, hi in MASTER_SCALE:
+        if lo <= pd < hi:
+            return grade
+    return "D"
+
+
+def master_to_green_black(scale: str) -> str:
+    """主标尺 → GREEN..BLACK 别名（credit/decision.py 兼容）。"""
+    return GREEN_BLACK_ALIAS.get(scale, "BLACK")
 
 
 def logistic_pd(score: float, a: float = CAL_A, b: float = CAL_B) -> float:
@@ -102,12 +155,14 @@ def calibrate(
         rationale.append(f"EAD={ead:.0f}万元 → EL=PD×LGD×EAD={el:.2f}万元")
 
     grade = "BLACK" if veto.get("triggered") else _pd_to_grade(pd)
+    scale = "D" if veto.get("triggered") else master_scale_from_pd(pd)
     return CalibrationResult(
         pd=round(pd, 4),
         lgd=round(lgd, 4),
         ead=ead,
         expected_loss=(round(el, 2) if el is not None else None),
         calibrated_grade=grade,
+        master_scale=scale,
         rationale=rationale,
     )
 

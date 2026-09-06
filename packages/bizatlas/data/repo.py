@@ -185,13 +185,17 @@ def save_risk_score(company_id: str, risk_payload: dict[str, Any]) -> str:
     conn = get_connection()
     try:
         conn.execute(
-            "INSERT INTO risk_scores (id, company_id, grade, score, payload_json, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO risk_scores (id, company_id, grade, score, master_scale, pd, reason_codes_json, payload_json, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 rid,
                 company_id,
                 risk_payload.get("grade"),
                 risk_payload.get("score"),
+                risk_payload.get("master_scale"),
+                risk_payload.get("pd"),
+                json.dumps(risk_payload.get("modules", {}).get("reason_codes"), ensure_ascii=False)
+                if risk_payload.get("modules") else None,
                 json.dumps(risk_payload, ensure_ascii=False),
                 _now(),
             ),

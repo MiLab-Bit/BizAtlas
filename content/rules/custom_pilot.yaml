@@ -43,3 +43,19 @@ rules:
   source: nl_compiler_llm
   version: pilot
   nl_text: 如果商誉占比超 25% 就预警
+- id: P4186891
+  name: 离线编译：商誉占比
+  dimension: 财务
+  severity: 中
+  status: pilot
+  contribute_to_score: false
+  condition:
+    type: threshold
+    metric: 商誉占比
+    op: '>'
+    value: 0.25
+  message: 如果商誉占比超 25% 就预警
+  explain: 当「商誉占比」满足 > 25% 时触发（pilot，确认后计分）。
+  source: nl_compiler_offline
+  version: pilot
+  nl_text: 如果商誉占比超 25% 就预警

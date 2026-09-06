@@ -129,6 +129,10 @@ class RiskResult(BaseModel):
     quality: QualityInfo = Field(default_factory=QualityInfo)
     evidence_refs: list[str] = Field(default_factory=list)  # 本次结论关联的全部证据
     scoring: ScoringSnapshot = Field(default_factory=ScoringSnapshot)
+    # —— B-RCF v2.0.0 融合层产物（向后兼容：均带默认值）——
+    master_scale: str | None = None  # 10 级银行主标尺 AAA→D
+    pd: float | None = None  # 违约概率（calibration 层）
+    modules: dict[str, Any] | None = None  # 财务困境/商业行为/reason codes 明细
     computed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 

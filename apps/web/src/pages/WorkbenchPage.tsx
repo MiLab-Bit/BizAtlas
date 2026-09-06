@@ -259,17 +259,21 @@ export function WorkbenchPage() {
                       </p>
 
                       {/* 标准银行风控模型：Altman Z-Score（原始上市制造业 5 变量） */}
-                      <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-muted/60 px-2 py-1">
-                        <span className="text-[11px] text-muted-foreground">Altman Z-Score</span>
-                        <span className="flex items-center gap-1.5">
-                          <span className="font-semibold tabular-nums">
-                            {c.altman_z != null ? c.altman_z.toFixed(2) : "—"}
-                          </span>
-                          {c.altman_zone ? (
-                            <span className={zoneCls(c.altman_zone)}>{c.altman_zone}</span>
-                          ) : null}
-                        </span>
-                      </div>
+                      {(() => {
+                        const z = mm["Z值(Altman)"];
+                        const zone = z == null ? null : z > 2.99 ? "安全区" : z >= 1.81 ? "灰色区" : "破产区";
+                        return (
+                          <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-muted/60 px-2 py-1">
+                            <span className="text-[11px] text-muted-foreground">Altman Z-Score</span>
+                            <span className="flex items-center gap-1.5">
+                              <span className="font-semibold tabular-nums">
+                                {z != null ? z.toFixed(2) : "—"}
+                              </span>
+                              {zone ? <span className={zoneCls(zone)}>{zone}</span> : null}
+                            </span>
+                          </div>
+                        );
+                      })()}
 
                       <dl className="mt-2 space-y-1 text-xs">
                         <div className="flex justify-between gap-2">

@@ -43,17 +43,32 @@ export function IntakePage() {
         grade: summary?.grade ?? null,
         score: summary?.score ?? null,
       });
-      const tyc = data.tianyancha as { ok?: boolean; configured?: boolean } | undefined;
+      // 三态区分：ok=已取得工商数据 | not_found=天眼查未收录该企业 | error=接口不可用
+      // 此前只有 ok/未命中 两态，且未收录时仍会打上「天眼查 ✓」标签，
+      // 让用户误以为拿到了工商数据。
+      const tyc = data.tianyancha as
+        | { ok?: boolean; configured?: boolean; status?: string }
+        | undefined;
+      const tycLabel = tyc?.ok
+        ? "天眼查"
+        : tyc?.configured
+          ? tyc.status === "error"
+            ? "天眼查不可用"
+            : "天眼查未收录"
+          : "天眼查未配置";
+      const tycNote = tyc?.ok
+        ? ""
+        : tyc?.configured
+          ? tyc.status === "error"
+            ? "\n\n⚠ 天眼查接口本次调用失败（凭证 / 网络 / 限流），未取得工商数据。以下内容仅基于本地资料，不代表工商事实。"
+            : "\n\n⚠ 天眼查未收录该企业名称，未取得工商数据。请核对企业全称（含省市区与「有限公司」后缀），或补充统一社会信用代码后重试。"
+          : "";
       setTurns([
         {
           role: "assistant",
-          content: data.message || `已开始对「${data.company_name}」背调，请继续提问。`,
-          meta: [
-            data.llm_used ? "LLM" : null,
-            tyc?.ok ? "天眼查" : tyc?.configured ? "天眼查未命中" : null,
-          ]
-            .filter(Boolean)
-            .join(" · "),
+          content:
+            (data.message || `已开始对「${data.company_name}」背调，请继续提问。`) + tycNote,
+          meta: [data.llm_used ? "LLM" : null, tycLabel].filter(Boolean).join(" · "),
         },
       ]);
       setInput("");

@@ -100,9 +100,20 @@ export function InvestigationPage() {
   });
 
   // 非实时模式：一次性取 trace；实时模式跳过（由 EventSource 驱动）
+  //
+  // ⚠ useMutation 每次渲染都返回一个新对象，把 pipeline 放进依赖数组会形成死循环：
+  //   mutate → onSuccess 里 setCursor/setPlaying → 重渲染 → pipeline 引用变化
+  //   → effect 重跑 → 再发请求。线上实测 5 分钟内打出 148 次完整管线请求，
+  //   直接把上游 LLM 网关压到 running=40/max=6，导致大面积 429 与静默降级。
+  // 这里改用 ref 持有 mutate，依赖只保留真正的数据项。
+  const pipelineMutate = useRef(pipeline.mutate);
+  pipelineMutate.current = pipeline.mutate;
+
   useEffect(() => {
-    if (!live) pipeline.mutate(selectedFixture);
-  }, [selectedFixture, pipeline, live]);
+    if (live) return;
+    if (!selectedFixture) return;
+    pipelineMutate.current(selectedFixture);
+  }, [selectedFixture, live]);
 
   // 实时模式：订阅 SSE，逐步驱动 Agent 状态与事件时间线
   useEffect(() => {

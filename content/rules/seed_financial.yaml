@@ -270,20 +270,8 @@ rules:
     op: '>'
     value: 0.2
   message: （pilot）商誉占比超过 20%，仅提示不计分
-- id: R1020
-  name: Altman Z-Score 破产预警区
-  dimension: 财务
-  severity: 高
-  status: active
-  contribute_to_score: true
-  condition:
-    type: threshold
-    metric: Altman_Z值
-    op: <
-    value: 1.81
-  message: Altman Z-Score < 1.81，落入破产预警区（原始上市制造业 5 变量模型口径）
 - id: R1021
-  name: Altman Z-Score 灰色区
+  name: Altman Z'-Score 灰色区
   dimension: 财务
   severity: 中
   status: active
@@ -291,55 +279,70 @@ rules:
   condition:
     type: composite
     all:
-    - metric: Altman_Z值
+    - metric: Z值(Altman)
       op: '>='
-      value: 1.81
-    - metric: Altman_Z值
+      value: 1.23
+    - metric: Z值(Altman)
       op: <
-      value: 2.99
+      value: 2.9
   message: Altman Z-Score 处于 1.81–2.99 灰色区，破产预警临界（需结合定性复核）
-
 - id: R1014
   name: Altman Z'-Score 破产区
   dimension: 财务
   severity: 高
   status: active
   contribute_to_score: true
-  condition: { type: threshold, metric: "Z值(Altman)", op: "<", value: 1.23 }
+  condition:
+    type: threshold
+    metric: Z值(Altman)
+    op: <
+    value: 1.23
   message: Altman Z'-Score 低于 1.23（破产预警区），模型提示较高违约概率
-
 - id: R1016
   name: 利息保障倍数不足
   dimension: 财务
   severity: 高
   status: active
   contribute_to_score: true
-  condition: { type: threshold, metric: "利息保障倍数", op: "<", value: 1.0 }
+  condition:
+    type: threshold
+    metric: 利息保障倍数
+    op: <
+    value: 1.0
   message: 利息保障倍数低于 1.0，息税前利润不足以覆盖利息支出
-
 - id: R1017
   name: 流动比率偏低
   dimension: 财务
   severity: 中
   status: active
   contribute_to_score: true
-  condition: { type: threshold, metric: "流动比率", op: "<", value: 1.0 }
+  condition:
+    type: threshold
+    metric: 流动比率
+    op: <
+    value: 1.0
   message: 流动比率低于 1.0，短期偿债缓冲不足（银行授信观察线）
-
 - id: R1018
   name: 资产负债率超限（授信压缩线）
   dimension: 财务
   severity: 高
   status: active
   contribute_to_score: true
-  condition: { type: threshold, metric: "资产负债率", op: ">", value: 0.85 }
+  condition:
+    type: threshold
+    metric: 资产负债率
+    op: '>'
+    value: 0.85
   message: 资产负债率高于 85%，触及银行授信压缩线
-
 - id: R1019
   name: 连续亏损三年及以上
   dimension: 财务
   severity: 高
   status: active
   contribute_to_score: true
-  condition: { type: threshold, metric: "连续亏损年数", op: ">", value: 2 }
+  condition:
+    type: threshold
+    metric: 连续亏损年数
+    op: '>'
+    value: 2
   message: 连续三年及以上亏损，持续经营能力存疑

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from datetime import UTC, datetime
 
 from bizatlas.contracts.models import (
@@ -12,6 +14,10 @@ from bizatlas.contracts.models import (
     ScoringSnapshot,
     VetoInfo,
 )
+from bizatlas.risk.behavioral import compute_behavioral
+from bizatlas.risk.calibration import calibrate, master_scale_from_pd
+from bizatlas.risk.distress import compute_distress
+from bizatlas.risk.reason_codes import build_reason_codes
 
 DIMENSION_WEIGHTS = {
     "财务": 0.30,
@@ -29,6 +35,14 @@ EARLY_WARNING_BOOST = 18.0
 EARLY_WARNING_SCORE_FLOOR = 45.0  # 仅用于披露/文档，打分走 BOOST
 EARLY_WARNING_RULE_IDS = {"R1011", "R1012"}
 EARLY_WARNING_EVENTS = {"连续两年扣非净利为负", "连续亏损"}
+
+# v2 综合分融合权重（规则严重度 / 财务困境 PD / 商业行为）
+# 任一层缺失时按可用层重分配（见 enrich_risk）。
+BLEND_WEIGHTS = {
+    "rule": 0.50,
+    "distress": 0.30,
+    "behavioral": 0.20,
+}
 
 
 def _grade(score: float, veto: bool) -> RiskGrade:
@@ -178,3 +192,149 @@ def score_risk(
         ),
         computed_at=datetime.now(UTC),
     )
+
+
+# ---------------------------------------------------------------------------
+# B-RCF v2.0.1 融合层：量纲统一 + 审慎叠加
+#
+# 规则分是 0-100「严重度」，困境层输出的是「违约概率 PD」，二者量纲不同。
+# 直接 PD×100 与规则分加权会让低 PD 层把高危主体稀释（实测 risky 96.2 → 54.1
+# ORANGE），因此这里先把 PD 统一到严重度尺度，再按银行 overlay 惯例融合：
+# 以规则分为基准，其他层仅在「显著劣于规则分」时向上叠加（只升不降），
+# 数据缺口不参与叠加——绝不把「未知」当「安全」。
+# ---------------------------------------------------------------------------
+_PD_SEV_LOW = 0.001  # PD ≈ 0.1% → 严重度 0（投资级下沿）
+_PD_SEV_HIGH = 0.99  # PD = 99% → 严重度 100
+UPLIFT_MIN_DELTA = 10.0  # 层严重度至少高出规则分 10 分才计入叠加（过滤噪声）
+BEHAVIORAL_MIN_COMPLETENESS = 0.5  # 行为层已知维度不足一半时不参与叠加
+
+
+def severity_from_pd(pd: float | None) -> float | None:
+    """违约概率 → 0-100 严重度分（对数几率尺度线性映射，与主标尺同序）。
+
+    PD 与风险严重度不是线性关系：PD 从 1% 升到 2% 的风险增幅远大于 50% 升到 51%。
+    因此在对数几率（log-odds）尺度上做线性映射，与评分卡 PDO 口径一致：
+    PD 0.1% → 0.0，1% → 20.1，5% → 34.5，13% → 43.5，50% → 60.0，95% → 85.7。
+    """
+    if pd is None:
+        return None
+    p = min(max(float(pd), 1e-6), 1 - 1e-6)
+    lo = math.log(_PD_SEV_LOW / (1 - _PD_SEV_LOW))
+    hi = math.log(_PD_SEV_HIGH / (1 - _PD_SEV_HIGH))
+    cur = math.log(p / (1 - p))
+    return round(max(0.0, min(100.0, (cur - lo) / (hi - lo) * 100.0)), 2)
+
+
+def blend_severity(rule_score: float, layers: dict[str, float | None]) -> tuple[float, dict]:
+    """以规则分为基准，按「显著劣化才上调」叠加各层严重度（只升不降）。
+
+    Args:
+        rule_score: 规则引擎严重度分（0-100，越高越危险）。
+        layers: {层名: 严重度分 | None}，None 表示该层数据缺口，不参与叠加。
+
+    Returns:
+        (综合分, 审计信息{uplift_total, uplift_by_layer})
+    """
+    uplift = 0.0
+    used: dict[str, float] = {}
+    for name, sev in layers.items():
+        if sev is None:
+            continue
+        delta = sev - rule_score
+        if delta >= UPLIFT_MIN_DELTA:
+            w = BLEND_WEIGHTS[name]
+            uplift += w * delta
+            used[name] = round(w * delta, 2)
+    combined = round(min(100.0, max(0.0, rule_score + uplift)), 2)
+    return combined, {"uplift_total": round(uplift, 2), "uplift_by_layer": used}
+
+
+def enrich_risk(
+    risk: RiskResult,
+    metrics: list[MetricValue],
+    events: dict | None = None,
+    hits: list[RuleHit] | None = None,
+    *,
+    distress: dict | None = None,
+    behavioral: dict | None = None,
+) -> RiskResult:
+    """B-RCF v2.0.1 融合层：规则严重度 + 财务困境 + 商业行为 → 综合风险。
+
+    不破坏现有 credit/decision.py（仍读 GREEN..BLACK 五档 grade）。本函数负责产出
+    10 级银行主标尺 master_scale、综合 PD、以及 FICO 式 reason codes。
+
+    融合口径（v2.0.1）:
+    - 统一量纲：困境层 PD 先经 severity_from_pd 映射到 0-100 严重度（对数几率尺度），
+      不再直接 PD×100 与规则分加权，避免量纲不等价稀释高危主体。
+    - 审慎叠加：以规则分为基准，其他层仅当「显著劣于规则分（≥ UPLIFT_MIN_DELTA）」
+      时向上叠加，只升不降；数据缺口（PD 缺失 / 行为层已知维度不足一半）不参与
+      叠加，绝不把「未知」当「安全」。
+    - PD/主标尺经 calibration 层（logistic + 文档化先验）产出。
+    """
+    events = events or {}
+
+    distress = distress if distress is not None else compute_distress(metrics)
+    behavioral = behavioral if behavioral is not None else compute_behavioral(events)
+
+    rule_score = float(risk.score)
+
+    # 困境层：PD 缺失即数据缺口，该层不参与叠加（不再按 0 计入）
+    distress_sev = severity_from_pd(distress.get("pd"))
+    # 行为层：已知维度过少时不参与叠加，避免用个别维度代表整体商业行为
+    beh_sev = (
+        float(behavioral.get("composite") or 0.0)
+        if behavioral.get("available")
+        and float(behavioral.get("completeness") or 0.0) >= BEHAVIORAL_MIN_COMPLETENESS
+        else None
+    )
+
+    combined, blend_audit = blend_severity(
+        rule_score, {"distress": distress_sev, "behavioral": beh_sev}
+    )
+
+    veto = risk.veto.triggered
+    if veto:
+        new_grade = RiskGrade.BLACK
+    else:
+        new_grade = _grade(combined, False)
+        if risk.quality.completeness < 0.5:
+            new_grade = RiskGrade.UNRATED
+
+    risk.score = combined
+    risk.grade = new_grade
+
+    # PD + 10 级主标尺（calibration 层）
+    cal = calibrate(risk.model_dump(mode="json"))
+    risk.pd = cal.pd
+    risk.master_scale = cal.master_scale
+
+    # FICO 式 reason codes
+    reasons = build_reason_codes(risk.dimensions, distress, behavioral, hits=hits, top_n=8)
+
+    risk.modules = {
+        "version": "2.0.1",
+        "fusion_mode": "rule_baseline_uplift",
+        "blend_weights": {
+            "rule": 1.0,
+            "distress": BLEND_WEIGHTS["distress"] if distress_sev is not None else 0.0,
+            "behavioral": BLEND_WEIGHTS["behavioral"] if beh_sev is not None else 0.0,
+        },
+        "layer_severity": {
+            "rule": rule_score,
+            "distress": distress_sev,
+            "behavioral": beh_sev,
+        },
+        **blend_audit,
+        "distress": distress,
+        "behavioral": behavioral,
+        "reason_codes": reasons,
+        "calibration": {
+            "pd": cal.pd,
+            "lgd": cal.lgd,
+            "expected_loss": cal.expected_loss,
+            "master_scale": cal.master_scale,
+            "rationale": cal.rationale,
+        },
+    }
+    risk.scoring.scoring_version = "2.0.1"
+    return risk

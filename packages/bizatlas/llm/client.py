@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import random
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 from contextvars import ContextVar
 from pathlib import Path
@@ -18,6 +21,21 @@ from bizatlas.data.db import get_connection
 
 class LLMUnavailable(RuntimeError):
     """LLM not configured or upstream error — callers should degrade."""
+
+
+# ---- LLM 并发闸门 + 限流退避 ----
+# 实测上游网关返回 `concurrent limit exceeded: running=40 max=6`，
+# 超限直接抛错会让 Agent 静默降级为规则模式（接口仍返 200），
+# 因此这里在客户端侧主动排队，宁可慢也不要悄悄降级。
+_MAX_CONCURRENCY = max(1, int(os.getenv("LLM_MAX_CONCURRENCY", "5")))
+_llm_gate = threading.BoundedSemaphore(_MAX_CONCURRENCY)
+# 429 / 5xx 重试：指数退避 + jitter，尊重 Retry-After
+_MAX_RETRIES = max(0, int(os.getenv("LLM_MAX_RETRIES", "3")))
+_RETRY_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504})
+_BACKOFF_CAP = 20.0
+# 观测计数（供 /v1/health 或日志排查用）
+_gate_stats = {"acquired": 0, "waited": 0, "timeouts": 0, "retries": 0}
+_gate_stats_lock = threading.Lock()
 
 
 # 请求级用户自带 provider 注入：由 API 路由在请求上下文中设置，
@@ -133,11 +151,30 @@ def _cache_put(key: str, content: str) -> None:
 
 def _extract_content(data: Any) -> str:
     try:
-        content = data["choices"][0]["message"]["content"]
+        message = data["choices"][0]["message"]
+        content = message["content"]
     except (KeyError, IndexError, TypeError) as exc:
         raise LLMUnavailable(f"unexpected LLM response: {data!r}") from exc
     if not isinstance(content, str) or not content.strip():
-        raise LLMUnavailable("empty LLM content")
+        # 推理型模型（如 GLM-5.2）会把 token 消耗在 reasoning_content 上，
+        # max_tokens 给小时 content 直接为空。这里把原因写进异常，避免线上只能看到「降级」。
+        reasoning = ""
+        finish = ""
+        try:
+            reasoning = str(message.get("reasoning_content") or "")
+        except AttributeError:
+            reasoning = ""
+        try:
+            finish = str(data["choices"][0].get("finish_reason") or "")
+        except (KeyError, IndexError, AttributeError, TypeError):
+            finish = ""
+        detail = f"finish_reason={finish or 'unknown'}"
+        if reasoning.strip():
+            raise LLMUnavailable(
+                f"empty LLM content：模型把 token 消耗在推理上（reasoning {len(reasoning)} 字符），"
+                f"需提高 max_tokens；{detail}"
+            )
+        raise LLMUnavailable(f"empty LLM content；{detail}")
     return content.strip()
 
 
@@ -267,6 +304,73 @@ def _chat_via_curl_stream(
             proc.wait(timeout=5)
 
 
+def gate_stats() -> dict[str, int]:
+    """返回并发闸门的观测计数（排队次数、重试次数、等待超时次数）。"""
+    with _gate_stats_lock:
+        return dict(_gate_stats)
+
+
+def _backoff_delay(resp: Any, attempt: int) -> float:
+    """指数退避 + jitter；上游给了 Retry-After 时以其为准。"""
+    retry_after = None
+    if resp is not None:
+        raw = resp.headers.get("retry-after") or resp.headers.get("Retry-After")
+        if raw:
+            try:
+                retry_after = float(str(raw).strip())
+            except ValueError:
+                retry_after = None
+    if retry_after is not None and retry_after >= 0:
+        return min(retry_after, _BACKOFF_CAP)
+    return min(1.5 * (2 ** attempt) + random.uniform(0.0, 0.6), _BACKOFF_CAP)
+
+
+def _acquire_gate(timeout: float) -> None:
+    """获取并发闸门；超时说明上游被压满，抛 LLMUnavailable 让调用方显式降级。"""
+    got = _llm_gate.acquire(timeout=max(timeout, 1.0))
+    with _gate_stats_lock:
+        if got:
+            _gate_stats["acquired"] += 1
+        else:
+            _gate_stats["timeouts"] += 1
+    if not got:
+        raise LLMUnavailable(
+            f"LLM 并发闸门等待超时（{timeout:.0f}s，上限 {_MAX_CONCURRENCY}），上游可能已被压满"
+        )
+
+
+def _post_with_retry(url: str, headers: dict[str, str], payload: dict[str, Any],
+                     timeout: float) -> Any:
+    """带并发闸门 + 429/5xx 指数退避的 chat/completions 请求。
+
+    只重试「可恢复」的错误：连接超时、429、5xx。4xx（除 429/408/425）不重试。
+    """
+    last_exc: Exception | None = None
+    for attempt in range(_MAX_RETRIES + 1):
+        _acquire_gate(timeout)
+        try:
+            with httpx.Client(timeout=timeout, trust_env=False) as client:
+                resp = client.post(url, headers=headers, json=payload)
+            if resp.status_code in _RETRY_STATUS and attempt < _MAX_RETRIES:
+                with _gate_stats_lock:
+                    _gate_stats["retries"] += 1
+                delay = _backoff_delay(resp, attempt)
+                time.sleep(delay)
+                continue
+            return resp
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError,
+                httpx.RemoteProtocolError) as exc:
+            last_exc = exc
+            if attempt >= _MAX_RETRIES:
+                raise
+            with _gate_stats_lock:
+                _gate_stats["retries"] += 1
+            time.sleep(_backoff_delay(None, attempt))
+        finally:
+            _llm_gate.release()
+    raise LLMUnavailable(str(last_exc) if last_exc else "LLM 请求失败（重试耗尽）")
+
+
 def _resolve_provider(provider: dict[str, Any] | None):
     """返回 (base, key, model)；provider 为 None 时回退到请求级注入 / 平台设置。"""
     if provider is None:
@@ -306,18 +410,16 @@ def _chat_completion_sync(
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    }
     try:
-        with httpx.Client(timeout=timeout, trust_env=False) as client:
-            resp = client.post(
-                url,
-                headers={
-                    "Authorization": f"Bearer {key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
-            resp.raise_for_status()
-            content = _extract_content(resp.json())
+        resp = _post_with_retry(url, headers, payload, timeout=timeout)
+        resp.raise_for_status()
+        content = _extract_content(resp.json())
+    except LLMUnavailable:
+        raise
     except Exception as httpx_exc:  # noqa: BLE001 — degrade / curl fallback
         try:
             content = _chat_via_curl(url, key, payload, timeout=timeout)
@@ -355,37 +457,42 @@ def _chat_completion_stream(
         "stream": True,
     }
     parts: list[str] = []
+    # 流式同样走并发闸门：SSE 长连接会长时间占用上游额度，不放闸比非流式更容易打爆
+    _acquire_gate(timeout)
     try:
-        with httpx.Client(timeout=timeout, trust_env=False).stream(
-            "POST",
-            url,
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-                "Accept": "text/event-stream",
-            },
-            json=payload,
-        ) as resp:
-            resp.raise_for_status()
-            for line in _iter_sse_lines(resp.iter_text()):
-                try:
-                    data = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                try:
-                    delta = data["choices"][0]["delta"]["content"]
-                except (KeyError, IndexError, TypeError):
-                    continue
-                if delta:
+        try:
+            with httpx.Client(timeout=timeout, trust_env=False).stream(
+                "POST",
+                url,
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                    "Accept": "text/event-stream",
+                },
+                json=payload,
+            ) as resp:
+                resp.raise_for_status()
+                for line in _iter_sse_lines(resp.iter_text()):
+                    try:
+                        data = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    try:
+                        delta = data["choices"][0]["delta"]["content"]
+                    except (KeyError, IndexError, TypeError):
+                        continue
+                    if delta:
+                        parts.append(delta)
+                        yield delta
+        except Exception as httpx_exc:  # noqa: BLE001 — degrade / curl fallback
+            try:
+                for delta in _chat_via_curl_stream(url, key, payload, timeout=timeout):
                     parts.append(delta)
                     yield delta
-    except Exception as httpx_exc:  # noqa: BLE001 — degrade / curl fallback
-        try:
-            for delta in _chat_via_curl_stream(url, key, payload, timeout=timeout):
-                parts.append(delta)
-                yield delta
-        except Exception as curl_exc:  # noqa: BLE001
-            raise LLMUnavailable(str(curl_exc) or str(httpx_exc)) from curl_exc
+            except Exception as curl_exc:  # noqa: BLE001
+                raise LLMUnavailable(str(curl_exc) or str(httpx_exc)) from curl_exc
+    finally:
+        _llm_gate.release()
     _cache_put(cache_key, "".join(parts))
 
 
@@ -393,7 +500,7 @@ def chat_completion(
     messages: list[dict[str, str]],
     *,
     temperature: float = 0.3,
-    max_tokens: int = 800,
+    max_tokens: int = 2000,
     timeout: float = 45.0,
     provider: dict[str, Any] | None = None,
     stream: bool = False,
