@@ -23,6 +23,7 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 
 from bizatlas.temporal.activities import (
+    build_trace_activity,
     classify_activity,
     plan_activity,
     research_activity,
@@ -133,10 +134,13 @@ class RiskAnalysisWorkflow:
                 "pipeline_status": "succeeded",
             }
         )
-        # 执行迹（纯函数，确定性）→ 供前端回放
-        from bizatlas.orchestrator.trace import build_trace
-
-        trace = build_trace(enriched)
+        # 执行迹：CPU 密集型拼装下沉到 Activity（Workflow 只做编排），供前端回放
+        trace = await workflow.execute_activity(
+            build_trace_activity,
+            enriched,
+            start_to_close_timeout=_ACT_TIMEOUT,
+            retry_policy=_ACT_RETRY,
+        )
         enriched["trace"] = trace
         self.result = enriched
         self.status = "completed"

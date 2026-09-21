@@ -6,6 +6,10 @@
   负责重试 / 超时 / 心跳 / 重放。
 - Activity 内延迟 import 领域模块，避免 Worker 启动时一次性加载全部依赖。
 - 跨边界数据统一用 dict / dataclass（见 common.py），不使用 pydantic 模型直传。
+- **Activity 一律用同步 `def`，不要写 `async def`**：temporalio 会把同步 Activity 放到
+  线程池执行，而 `async def` Activity 跑在 Worker 的 asyncio 事件循环上；本层内部调用的
+  是同步阻塞的领域代码（LLM HTTP、SQLite、报告导出），写成 async 会**阻塞整个事件循环**，
+  表现为 `Workflow task duration exceeded 5 seconds`、流水线变慢、Pod 停机卡住。
 """
 
 from __future__ import annotations
@@ -20,7 +24,7 @@ from temporalio import activity
 # ======================================================================
 
 @activity.defn(name="run_analyze")
-async def run_analyze_activity(inp: dict[str, Any]) -> dict[str, Any]:
+def run_analyze_activity(inp: dict[str, Any]) -> dict[str, Any]:
     """评分内核（唯一事实源）：规则 + 计算 + 可选 LLM 润色。"""
     from bizatlas.contracts.models import AnalyzeRequest
     from bizatlas.orchestrator.analyze import run_analyze
@@ -33,7 +37,7 @@ async def run_analyze_activity(inp: dict[str, Any]) -> dict[str, Any]:
 
 
 @activity.defn(name="classify_company")
-async def classify_activity(core: dict[str, Any]) -> dict[str, Any]:
+def classify_activity(core: dict[str, Any]) -> dict[str, Any]:
     """分类 Agent：赛道/行业归类（无 LLM 时确定性降级）。"""
     from bizatlas.agents.classifier import classify_company
 
@@ -42,7 +46,7 @@ async def classify_activity(core: dict[str, Any]) -> dict[str, Any]:
 
 
 @activity.defn(name="plan_research")
-async def plan_activity(ctx: dict[str, Any]) -> dict[str, Any]:
+def plan_activity(ctx: dict[str, Any]) -> dict[str, Any]:
     """规划 Agent：基于风险 + 企业 + 分类产出研究计划（失败感知）。"""
     from bizatlas.agents.planner import plan_research
 
@@ -51,7 +55,7 @@ async def plan_activity(ctx: dict[str, Any]) -> dict[str, Any]:
 
 
 @activity.defn(name="research")
-async def research_activity(ctx: dict[str, Any]) -> dict[str, Any]:
+def research_activity(ctx: dict[str, Any]) -> dict[str, Any]:
     """研究 Agent：本地 RAG 检索，填充研究计划各维度。"""
     from bizatlas.agents.researcher import research
 
@@ -64,7 +68,7 @@ async def research_activity(ctx: dict[str, Any]) -> dict[str, Any]:
 
 
 @activity.defn(name="write_report")
-async def write_activity(ctx: dict[str, Any]) -> dict[str, Any]:
+def write_activity(ctx: dict[str, Any]) -> dict[str, Any]:
     """写作 Agent：writer-only 叙事 + 披露（不改分，不改决策）。"""
     from bizatlas.agents.writer import write_report
 
@@ -78,12 +82,25 @@ async def write_activity(ctx: dict[str, Any]) -> dict[str, Any]:
     return res.model_dump(mode="json")
 
 
+@activity.defn(name="build_trace")
+def build_trace_activity(enriched: dict[str, Any]) -> dict[str, Any]:
+    """生成可视化执行迹（Agent 卡 / 工具调用 / 事件时间线 / 证据面板）。
+
+    刻意放在 Activity 而非 Workflow 内：Workflow 只做编排，CPU 密集型拼装下沉到
+    Activity，否则会把 workflow task 拖长（实测会触发 Temporal 的
+    "Workflow task duration exceeded 5 seconds" 警告）。
+    """
+    from bizatlas.orchestrator.trace import build_trace
+
+    return build_trace(enriched)
+
+
 # ======================================================================
 # 贷前尽调状态机
 # ======================================================================
 
 @activity.defn(name="dd_create")
-async def start_dd_activity(inp: dict[str, Any]) -> dict[str, Any]:
+def start_dd_activity(inp: dict[str, Any]) -> dict[str, Any]:
     """启动贷前尽调：建/取企业、灌 fixture 指标，返回原始 payload（不快照）。"""
     from bizatlas.workflow.due_diligence import create_due_diligence
 
@@ -96,7 +113,7 @@ async def start_dd_activity(inp: dict[str, Any]) -> dict[str, Any]:
 
 
 @activity.defn(name="dd_compute_checklist")
-async def compute_checklist_activity(args: dict[str, Any]) -> list[dict[str, Any]]:
+def compute_checklist_activity(args: dict[str, Any]) -> list[dict[str, Any]]:
     """计算 checklist 就绪状态（读 SQLite 指标数 / 企业名）。"""
     from bizatlas.workflow.due_diligence import _checklist_status, load_template
 
@@ -107,7 +124,7 @@ async def compute_checklist_activity(args: dict[str, Any]) -> list[dict[str, Any
 
 
 @activity.defn(name="dd_export_onepager")
-async def export_onepager_activity(analyze_key: str) -> dict[str, Any]:
+def export_onepager_activity(analyze_key: str) -> dict[str, Any]:
     """submit 阶段：导出 one-pager 报告（Markdown/Word/PDF + 防篡改签名）。"""
     from bizatlas.orchestrator.analyze import generate_onepager_report
 
@@ -115,7 +132,7 @@ async def export_onepager_activity(analyze_key: str) -> dict[str, Any]:
 
 
 @activity.defn(name="dd_generate_report")
-async def generate_report_activity(args: dict[str, Any]) -> dict[str, Any]:
+def generate_report_activity(args: dict[str, Any]) -> dict[str, Any]:
     """report/submit 阶段：生成 one-pager 报告。
 
     confirm_export=True 才落盘导出（Markdown/Word/PDF + 防篡改签名）；
@@ -127,7 +144,7 @@ async def generate_report_activity(args: dict[str, Any]) -> dict[str, Any]:
 
 
 @activity.defn(name="dd_mirror")
-async def mirror_dd_activity(args: dict[str, Any]) -> None:
+def mirror_dd_activity(args: dict[str, Any]) -> None:
     """每次状态变更后把镜像写入 SQLite，供 GET /v1/workflows 列表查询。
 
     Temporal 是事件溯源日志，不适合做"列表所有进行中工作流"这种扫描查询；
@@ -145,7 +162,7 @@ async def mirror_dd_activity(args: dict[str, Any]) -> None:
 
 
 @activity.defn(name="dd_load_template")
-async def load_template_activity() -> dict[str, Any]:
+def load_template_activity() -> dict[str, Any]:
     """读取贷前尽调模板 YAML（Workflow 启动时拉一次，避免 Workflow 内读盘）。"""
     from bizatlas.workflow.due_diligence import load_template
 
@@ -158,6 +175,7 @@ __all__ = [
     "plan_activity",
     "research_activity",
     "write_activity",
+    "build_trace_activity",
     "start_dd_activity",
     "compute_checklist_activity",
     "export_onepager_activity",

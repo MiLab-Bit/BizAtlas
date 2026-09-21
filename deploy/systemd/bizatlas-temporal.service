@@ -1,0 +1,18 @@
+[Unit]
+Description=Temporal Server (BizAtlas, self-hosted dev server)
+Documentation=https://docs.temporal.io
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/temporal server start-dev --ip 127.0.0.1 --port 7233 --ui-port 8233 --db-filename /var/lib/temporal/temporal.db
+StateDirectory=temporal
+Restart=on-failure
+RestartSec=5
+User=root
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=temporal
+
+[Install]
+WantedBy=multi-user.target

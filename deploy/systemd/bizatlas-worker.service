@@ -1,0 +1,23 @@
+[Unit]
+Description=BizAtlas Temporal Worker
+After=network.target bizatlas-temporal.service
+Wants=bizatlas-temporal.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/bizatlas
+Environment=PYTHONPATH=/opt/bizatlas/packages:/opt/bizatlas/apps
+Environment=BIZATLAS_TEMPORAL_ENABLED=true
+Environment=TEMPORAL_ADDRESS=127.0.0.1:7233
+Environment=TEMPORAL_NAMESPACE=default
+Environment=TEMPORAL_TASK_QUEUE=bizatlas-task-queue
+ExecStart=/opt/bizatlas/venv/bin/python -u scripts/run_worker.py
+Restart=always
+RestartSec=5
+User=root
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bizatlas-worker
+
+[Install]
+WantedBy=multi-user.target
