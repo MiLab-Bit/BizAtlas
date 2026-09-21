@@ -149,3 +149,64 @@ python scripts/e2e_due_diligence.py      # DueDiligenceWorkflow（含人在回�
 5. **Update 初始化竞态**：客户端启动后立刻 `advance` 时，Update 可能在 `run()` 完成初始化前到达；`advance`/`review` 加 `wait_condition(company_id is not None)`。
 6. **Update 与终态竞速**：`submit` 使 Workflow 完成时，Update 回值可能丢失（`AcceptedUpdateCompletedWorkflow`）；网关与示例客户端在 `action=="submit"` 时改取 `handle.result()`。
 7. **Update 入参风格**：`WorkflowHandle.execute_update` 只接受单个 `arg` 或 `args=[...]`，不支持关键字参数，网关已改用 `args=[...]`。
+
+---
+
+## 生产启用记录（2026-09-22）
+
+### 运行形态
+
+Temporal 与 Worker 均已作为 systemd 服务跑在生产机上：
+
+| 服务 | 作用 | 端口 / 文件 |
+|---|---|---|
+| `bizatlas-temporal.service` | `temporal server start-dev`（自托管）| gRPC `127.0.0.1:7233`、UI `127.0.0.1:8233`、db `/var/lib/temporal/temporal.db` |
+| `bizatlas-worker.service` | Worker（注册 Workflow / Activity）| 队列 `bizatlas-task-queue` |
+| `bizatlas.service` | FastAPI | 已加 `TimeoutStopSec=20` |
+
+unit 文件见 `deploy/systemd/`。CLI 装在 `/usr/local/bin/temporal`（1.9.1 / Server 1.32.0）。
+
+`.env` 新增：
+
+```
+BIZATLAS_TEMPORAL_ENABLED=true
+TEMPORAL_ADDRESS=127.0.0.1:7233
+TEMPORAL_NAMESPACE=default
+TEMPORAL_TASK_QUEUE=bizatlas-task-queue
+```
+
+### 接口契约（关键：前端无需改动）
+
+打开开关后契约与旧路径保持一致，因此前端不做任何改动：
+
+| 路由 | 行为 |
+|---|---|
+| `POST /v1/analyze/pipeline` | 仍返回**完整结果 + trace**（网关 `start_pipeline_and_wait` 启动工作流并等结果），`meta.engine="temporal"` |
+| `POST /v1/analyze/pipeline/async` | **新增**：立即返回 `{workflow_id, status}`，客户端轮询 |
+| `GET /v1/analyze/pipeline/{workflow_id}` | **新增**：查询进度 / 结果 |
+| `GET /v1/analyze/pipeline/stream` | SSE 仍逐事件推送，**结束时补 `{"type":"done","trace":...}`**（与旧 SSE 收尾对齐）|
+| `/v1/workflows/*`（贷前尽调）| 返回快照键与旧 `_snapshot` **完全一致** |
+
+### 本轮修复的问题
+
+1. **相对导入**：线上模块路径是 `apps.api.app.main`（`python -m apps.api.launcher`），没有顶层 `app` 包；
+   `from app.temporal_gateway import ...` 会在运行时 `ModuleNotFoundError` →
+   全部改为 `from .temporal_gateway import ...`。**这类问题只在 Temporal 分支首次执行时暴露。**
+2. **Activity 一律同步**：原 11 个 Activity 写成 `async def`，但内部是同步阻塞调用（LLM HTTP、SQLite、报告导出），
+   会阻塞 Worker 的 asyncio 事件循环 → 实测触发 `Workflow task duration exceeded 5 seconds`（阻塞 176s）。
+   现改为同步 `def`，并在 Worker 上配置 `activity_executor`（`ThreadPoolExecutor(max_workers=20)`）。
+   ⚠️ 同步 Activity **必须**提供 `activity_executor`，否则启动即报
+   `Activity ... is not async so an activity_executor must be present`。
+3. **`build_trace` 下沉为 Activity**：CPU 密集的执行迹拼装原本在 Workflow 内完成，违反「Workflow 只做编排」，
+   改为 `build_trace_activity`。
+
+### 运维注意
+
+- **改 Workflow 代码后须先终止在途实例**（避免重放非确定性）：
+  `temporal workflow terminate --workflow-id <id> --reason "代码升级"`
+- 同一 task queue 只跑**一个** Worker；用
+  `temporal task-queue describe --task-queue bizatlas-task-queue` 查 pollers。
+- 长请求会阻塞 uvicorn 优雅停机（表现为 `systemctl restart` 卡住、`is-active` 显示 `deactivating`）。
+  已加 `TimeoutStopSec=20`；应急 `systemctl kill -s SIGKILL bizatlas`。
+- ⚠️ **待评估**：Temporal 单次 payload 默认上限约 2MB，而 `RiskAnalysisWorkflow` 返回体含
+  `trace` / `agents` / `citations`；大企业、多文档场景可能超限，必要时改为「结果落库 + 跨边界只传引用」。

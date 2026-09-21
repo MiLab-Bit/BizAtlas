@@ -54,6 +54,31 @@ async def start_pipeline(req_dict: dict[str, Any]) -> dict[str, Any]:
     return {"workflow_id": handle.id, "status": "running"}
 
 
+async def start_pipeline_and_wait(req_dict: dict[str, Any]) -> dict[str, Any]:
+    """同步语义：启动工作流并等待其最终结果。
+
+    用途：给「需要一次性拿完整产出」的调用方（前端调查工作台非实时模式）保留原有
+    API 契约 —— 返回体与 `run_analysis_pipeline` 同构（含 trace），但执行仍然跑在
+    Temporal 上（可重试、可观测、崩溃可续跑）。
+    """
+    from bizatlas.temporal.common import RiskAnalysisInput
+    from bizatlas.temporal.workflows.risk_analysis import RiskAnalysisWorkflow
+
+    settings = get_settings()
+    client = await _client()
+    inp = RiskAnalysisInput(
+        company_id=req_dict["company_id"],
+        intent=req_dict.get("intent", "analyze_risk"),
+        template_id=req_dict.get("template_id"),
+        options=req_dict.get("options") or {},
+    )
+    wid = inp.workflow_id or f"ra-{inp.company_id}-{int(time.time() * 1000)}"
+    handle = await client.start_workflow(
+        RiskAnalysisWorkflow.run, inp, id=wid, task_queue=settings.temporal_task_queue
+    )
+    return await handle.result()
+
+
 async def get_pipeline(workflow_id: str) -> dict[str, Any]:
     from bizatlas.temporal.workflows.risk_analysis import RiskAnalysisWorkflow
 
@@ -66,7 +91,11 @@ async def get_pipeline(workflow_id: str) -> dict[str, Any]:
 
 
 async def stream_pipeline_events(workflow_id: str) -> AsyncIterator[dict[str, Any]]:
-    """轮询管线进度，逐条 yield 新增事件，直到 completed。供 SSE 路由渲染。"""
+    """轮询管线进度，逐条 yield 新增事件，最后补一条 done（携带完整 trace）。
+
+    与旧进程内 SSE 的收尾事件对齐：前端 InvestigationPage 依赖
+    `{"type": "done", "trace": ...}` 回放渲染，缺了它页面会停在中间态。
+    """
     from bizatlas.temporal.workflows.risk_analysis import RiskAnalysisWorkflow
 
     client = await _client()
@@ -79,10 +108,16 @@ async def stream_pipeline_events(workflow_id: str) -> AsyncIterator[dict[str, An
             yield ev
         cursor = len(progress)
         if status == "completed":
-            for ev in progress[cursor:]:
-                yield ev
+            break
+        if status == "failed":
+            yield {"type": "error", "message": "风险研判工作流执行失败"}
             return
         await asyncio.sleep(0.5)
+    try:
+        result = await handle.query(RiskAnalysisWorkflow.get_result) or {}
+    except Exception:  # noqa: BLE001 — 结果不可用时仍要正常收尾
+        result = {}
+    yield {"type": "done", "trace": result.get("trace") or {}}
 
 
 # ======================================================================

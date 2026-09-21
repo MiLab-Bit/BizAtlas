@@ -332,14 +332,30 @@ async def analyze_pipeline(req: AnalyzeRequest) -> Envelope[dict]:
     返回管线完整产出，并附带可视化执行迹 trace（Agent 卡 / 工具调用 /
     事件时间线 / 证据面板），供前端「调查工作台」回放渲染。
 
-    开启 BIZATLAS_TEMPORAL_ENABLED 时改为启动 Temporal 工作流并立即返回
-    {workflow_id, status}，客户端用 /v1/analyze/pipeline/{workflow_id} 轮询进度。
+    开启 BIZATLAS_TEMPORAL_ENABLED 时改由 Temporal 工作流执行，但**返回契约不变**
+    （仍是完整产出 + trace）；如需异步拿 workflow_id，用 /v1/analyze/pipeline/async。
     """
     if settings.bizatlas_temporal_enabled:
-        from app.temporal_gateway import start_pipeline
+        from .temporal_gateway import start_pipeline_and_wait
 
-        out = await start_pipeline(req.model_dump())
-        return Envelope(ok=True, data=out, meta={"mode": settings.bizatlas_mode, "engine": "temporal"})
+        try:
+            result = await start_pipeline_and_wait(req.model_dump())
+        except Exception as exc:  # noqa: BLE001 — 与旧路径保持一致：企业不存在返回 404
+            if "not found" in str(exc).lower():
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            raise
+        degraded = result.get("metrics_count", 0) == 0
+        return Envelope(
+            ok=True,
+            data=result,
+            meta={
+                "request_id": result.get("task_id"),
+                "mode": settings.bizatlas_mode,
+                "pipeline_mode": result.get("pipeline_mode"),
+                "degraded": degraded,
+                "engine": "temporal",
+            },
+        )
     try:
         result = run_analysis_pipeline(req)
     except ValueError as exc:
@@ -358,6 +374,23 @@ async def analyze_pipeline(req: AnalyzeRequest) -> Envelope[dict]:
     )
 
 
+@app.post("/v1/analyze/pipeline/async")
+async def analyze_pipeline_async(req: AnalyzeRequest) -> Envelope[dict]:
+    """异步研判：立即返回 {workflow_id, status}，客户端轮询 /v1/analyze/pipeline/{workflow_id}。
+
+    仅当启用 Temporal 时可用。长任务且客户端可轮询时优先用这个 —— API 不必挂住连接，
+    发版/重启也不会中断在途研判。
+    """
+    if not settings.bizatlas_temporal_enabled:
+        raise HTTPException(
+            status_code=404, detail="Temporal 编排未启用（BIZATLAS_TEMPORAL_ENABLED=false）"
+        )
+    from .temporal_gateway import start_pipeline
+
+    out = await start_pipeline(req.model_dump())
+    return Envelope(ok=True, data=out, meta={"engine": "temporal"})
+
+
 @app.get("/v1/analyze/pipeline/{workflow_id}")
 async def analyze_pipeline_status(workflow_id: str) -> Envelope[dict]:
     """查询 Temporal 研判工作流进度/结果（进度事件供前端渲染）。
@@ -366,7 +399,7 @@ async def analyze_pipeline_status(workflow_id: str) -> Envelope[dict]:
     """
     if not settings.bizatlas_temporal_enabled:
         raise HTTPException(status_code=404, detail="Temporal 编排未启用（BIZATLAS_TEMPORAL_ENABLED=false）")
-    from app.temporal_gateway import get_pipeline
+    from .temporal_gateway import get_pipeline
 
     try:
         data = await get_pipeline(workflow_id)
@@ -405,7 +438,7 @@ async def analyze_pipeline_stream(
     }
 
     if settings.bizatlas_temporal_enabled:
-        from app.temporal_gateway import start_pipeline, stream_pipeline_events
+        from .temporal_gateway import start_pipeline, stream_pipeline_events
 
         async def temporal_event_gen():
             wid = workflow_id
@@ -1229,7 +1262,7 @@ def get_report_markdown(report_id: str) -> PlainTextResponse:
 @app.post("/v1/workflows/due-diligence")
 async def start_workflow(req: StartWorkflowRequest) -> Envelope[dict]:
     if settings.bizatlas_temporal_enabled:
-        from app.temporal_gateway import start_due_diligence_wf
+        from .temporal_gateway import start_due_diligence_wf
 
         try:
             data = await start_due_diligence_wf(req.model_dump())
@@ -1256,7 +1289,7 @@ def workflows() -> Envelope[list[dict]]:
 @app.get("/v1/workflows/{workflow_id}")
 async def workflow_detail(workflow_id: str) -> Envelope[dict]:
     if settings.bizatlas_temporal_enabled:
-        from app.temporal_gateway import get_due_diligence_wf
+        from .temporal_gateway import get_due_diligence_wf
 
         try:
             data = await get_due_diligence_wf(workflow_id)
@@ -1273,7 +1306,7 @@ async def workflow_detail(workflow_id: str) -> Envelope[dict]:
 @app.post("/v1/workflows/{workflow_id}/advance")
 async def workflow_advance(workflow_id: str, req: AdvanceWorkflowRequest) -> Envelope[dict]:
     if settings.bizatlas_temporal_enabled:
-        from app.temporal_gateway import advance_due_diligence_wf
+        from .temporal_gateway import advance_due_diligence_wf
 
         try:
             data = await advance_due_diligence_wf(
@@ -1312,7 +1345,7 @@ async def workflow_review(
 ) -> Envelope[dict]:
     """人工复核状态机（阶段 0 内核）接入 RBAC：仅 reviewer/admin 可操作。"""
     if settings.bizatlas_temporal_enabled:
-        from app.temporal_gateway import review_due_diligence_wf
+        from .temporal_gateway import review_due_diligence_wf
 
         try:
             data = await review_due_diligence_wf(
