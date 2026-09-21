@@ -19,6 +19,14 @@ from typing import Any
 from temporalio import activity
 
 
+def _heartbeat(*detail: str) -> None:
+    """Activity 心跳。离线直调（无 Activity 运行时上下文）时忽略，便于单测。"""
+    try:
+        activity.heartbeat(*detail)
+    except RuntimeError:
+        pass
+
+
 # ======================================================================
 # 多 Agent 研判管线
 # ======================================================================
@@ -29,10 +37,10 @@ def run_analyze_activity(inp: dict[str, Any]) -> dict[str, Any]:
     from bizatlas.contracts.models import AnalyzeRequest
     from bizatlas.orchestrator.analyze import run_analyze
 
-    activity.heartbeat("scoring:start")
+    _heartbeat("scoring:start")
     req = AnalyzeRequest(**inp)
     result = run_analyze(req)
-    activity.heartbeat("scoring:done")
+    _heartbeat("scoring:done")
     return result
 
 
