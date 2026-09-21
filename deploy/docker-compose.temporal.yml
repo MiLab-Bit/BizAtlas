@@ -1,0 +1,73 @@
+# BizAtlas × Temporal 编排底座（开发 / 演示）
+#
+# 启动：
+#   docker compose -f deploy/docker-compose.temporal.yml up -d
+#
+# 包含：
+#   - temporal        Temporal Dev Server（带 Web UI，端口 8080）
+#   - bizatlas-api    FastAPI，BIZATLAS_TEMPORAL_ENABLED=true
+#   - bizatlas-worker Temporal Worker（注册 Workflow/Activity，轮询任务队列）
+#
+# 说明：镜像基于仓库 Dockerfile 构建；为不污染核心 requirements.txt（离线 CI 友好），
+#       这里在 command 里临时 `pip install temporalio`。生产应把 temporalio 固化进镜像
+#       （在 requirements.txt 或独立 requirements.temporal.txt 中声明后重建）。
+#
+# 不启用 Temporal 时，单独用原 deploy/docker-compose.yml 即可，行为不变。
+
+services:
+  temporal:
+    image: temporalio/auto-setup:latest
+    container_name: bizatlas-temporal
+    environment:
+      - DB=sqlite
+    ports:
+      - "7233:7233" # 前端 gRPC（Worker / Client 连接地址）
+      - "8080:8080" # Web UI（localhost:8080）
+    healthcheck:
+      test: ["CMD", "tctl", "namespace", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  bizatlas-api:
+    build: .
+    container_name: bizatlas-api
+    env_file:
+      - .env
+    environment:
+      BIZATLAS_AUTH_DISABLED: "false"
+      BIZATLAS_TEMPORAL_ENABLED: "true"
+      TEMPORAL_ADDRESS: "temporal:7233"
+      TEMPORAL_NAMESPACE: "default"
+      TEMPORAL_TASK_QUEUE: "bizatlas-task-queue"
+    depends_on:
+      temporal:
+        condition: service_healthy
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:8000:8000"
+    volumes:
+      - ./data:/opt/bizatlas/data
+      - ./uploads:/opt/bizatlas/uploads
+      - ./exports:/opt/bizatlas/exports
+    command:
+      ["sh", "-c", "pip install --no-cache-dir temporalio && uvicorn apps.api.launcher:app --host 0.0.0.0 --port 8000"]
+
+  bizatlas-worker:
+    build: .
+    container_name: bizatlas-worker
+    env_file:
+      - .env
+    environment:
+      BIZATLAS_TEMPORAL_ENABLED: "true"
+      TEMPORAL_ADDRESS: "temporal:7233"
+      TEMPORAL_NAMESPACE: "default"
+      TEMPORAL_TASK_QUEUE: "bizatlas-task-queue"
+    depends_on:
+      temporal:
+        condition: service_healthy
+    volumes:
+      - ./data:/opt/bizatlas/data
+      - ./uploads:/opt/bizatlas/uploads
+      - ./exports:/opt/bizatlas/exports
+    command:
+      ["sh", "-c", "pip install --no-cache-dir temporalio && python -m bizatlas.temporal.worker"]
