@@ -41,6 +41,18 @@ include = ["bizatlas*", "apps*"]
 testpaths = ["tests"]
 pythonpath = ["packages", "apps"]
 
+# Temporal 编排层（client / worker / activities / workflows）依赖可选依赖 temporalio
+# 与一个真实 Temporal server，CI 不安装也不启动，无法在覆盖率门禁中体现；
+# 故从统计中排除，其行为由 tests/test_temporal.py 单独验证
+# （纯逻辑测试离线可跑；端到端集成测试在 TEMPORAL_SERVER=1 时运行）。
+[tool.coverage.run]
+omit = [
+  "*/bizatlas/temporal/client.py",
+  "*/bizatlas/temporal/worker.py",
+  "*/bizatlas/temporal/activities.py",
+  "*/bizatlas/temporal/workflows/*",
+]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
