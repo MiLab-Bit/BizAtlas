@@ -81,6 +81,13 @@ class Settings(BaseSettings):
     email_base_url: str = "http://localhost:5173"  # 验证/重置链接的前端 base
     email_token_ttl: int = 3600  # 验证/重置 token 有效期（秒）
 
+    # ---- Temporal 编排底座（可选）----
+    # 关闭时全部走原同步路径；开启后长任务改由 Temporal 编排（需另起 Worker）。
+    bizatlas_temporal_enabled: bool = False
+    temporal_address: str = "localhost:7233"  # Temporal 前端地址
+    temporal_namespace: str = "default"  # start-dev 默认命名空间；可 `temporal namespace create bizatlas`
+    temporal_task_queue: str = "bizatlas-task-queue"  # Worker 轮询的任务队列
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

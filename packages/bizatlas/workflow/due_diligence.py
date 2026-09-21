@@ -114,14 +114,19 @@ def _snapshot(workflow_id: str) -> dict[str, Any]:
     }
 
 
-def start_due_diligence(
+def create_due_diligence(
     *,
     company_id: str | None = None,
     fixture_id: str | None = None,
     name: str | None = None,
     industry: str = "",
 ) -> dict[str, Any]:
-    """Start workflow. Prefer fixture_id for demo; or existing/new company_id."""
+    """建/取企业并初始化贷前尽调状态，返回原始 payload（供 Temporal Activity / 上层编排使用）。
+
+    与 start_due_diligence 的区别：本函数返回未快照的原始结构
+    {workflow_id, template_id, company_id, stage, payload}，便于 Temporal Workflow
+    持有状态；start_due_diligence 在其之上返回 UI 快照（legacy 同步路径）。
+    """
     template = load_template()
     events: dict[str, Any] = {}
 
@@ -156,7 +161,30 @@ def start_due_diligence(
     checklist = _checklist_status(company_id, payload["manual_flags"], template)
     stage = "ready" if _required_ready(checklist) else "checklist"
     wid = repo.save_workflow("due_diligence", company_id, stage, payload)
-    return _snapshot(wid)
+    return {
+        "workflow_id": wid,
+        "template_id": "due_diligence",
+        "company_id": company_id,
+        "stage": stage,
+        "payload": payload,
+    }
+
+
+def start_due_diligence(
+    *,
+    company_id: str | None = None,
+    fixture_id: str | None = None,
+    name: str | None = None,
+    industry: str = "",
+) -> dict[str, Any]:
+    """Start workflow. Prefer fixture_id for demo; or existing/new company_id.
+
+    同步路径薄封装：返回 UI 快照（Temporal 路径见 temporal.activities.start_dd_activity）。
+    """
+    created = create_due_diligence(
+        company_id=company_id, fixture_id=fixture_id, name=name, industry=industry
+    )
+    return _snapshot(created["workflow_id"])
 
 
 def get_due_diligence(workflow_id: str) -> dict[str, Any]:

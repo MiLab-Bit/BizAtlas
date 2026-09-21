@@ -19,9 +19,15 @@ dev = [
   "pytest>=8.3.0",
   "ruff>=0.8.0",
 ]
+# Temporal 编排底座（可选）：仅启用 Worker / 走 Temporal 编排时才需安装。
+# 不计入核心依赖，避免离线 CI 因 PyPI 不可达而失败。
+temporal = [
+  "temporalio>=1.6.0",
+]
 
 [project.scripts]
 bizatlas-api = "apps.api.launcher:main"
+bizatlas-worker = "bizatlas.temporal.worker:run"
 
 [build-system]
 requires = ["setuptools>=75.0.0"]
