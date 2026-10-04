@@ -46,48 +46,34 @@
         ↓
 资料理解 → 规则匹配 → 风险研判 → 投研整理 → 流程辅助
         ↓
-数据层（多源获取 · 三级降级 · 六维质检 · SQLite · 本地 RAG）
+数据层（多源获取 · 三级降级 · 六维质检 · SQLite · RAG）
 ```
 
-| 层 | 技术 |
-|---|---|
-| 后端 | FastAPI + uvicorn，Python 3.11（venv 隔离） |
-| 前端 | React 19 + TypeScript + Vite + Tailwind + ECharts + AntV G6 |
-| 数据 | SQLite + TuShare / 企查查 / 天眼查 / AkShare（多源、降级、质检） |
-| 部署 | systemd + nginx 反代 + Cloudflare 隧道（公网 `139.224.163.203:8080`） |
-| LLM | 微信 Token 网关（GLM-5.2），仅做解析辅助与文案润色 |
-
-> 关键数字走确定性计算；LLM 只做解析辅助与文案；结论处处可溯源。
+全栈 Python（FastAPI + React 19 工作台），详情见 [技术架构文档](docs/ARCHITECTURE.md)。
 
 ## 🧭 文档地图
 
-| 文档 | 读完应知道 |
-|---|---|
-| [doc/README.md](doc/README.md) | 文档地图与 PRD 关系 |
-| [doc/01-product-scope.md](doc/01-product-scope.md) | MVP 范围与 Non-goals |
-| [doc/02-architecture.md](doc/02-architecture.md) | 分层、边界、主序列 |
-| [doc/05-agent-pipeline.md](doc/05-agent-pipeline.md) | 分析流水线六阶段 |
-| [doc/06-api-contracts.md](doc/06-api-contracts.md) | HTTP 契约 |
-| [doc/13-features-and-differentiators.md](doc/13-features-and-differentiators.md) | 功能与特色详解 |
-
-冲突口径：**验收以产品设计（PRD）为准；实现细节以 `doc/` + ADR 为准。**
+| 文档 | 内容 |
+| --- | --- |
+| [`PRD.md`](docs/PRD.md) | 产品需求文档 |
+| [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 技术架构 |
+| [`RULES.md`](docs/RULES.md) | 规则引擎设计 |
+| [`HANDOVER.md`](docs/HANDOVER.md) | 交接文档 |
 
 ## 🏁 快速开始
 
 ```bash
-# 后端（已含便携运行时）
-$env:PYTHONPATH = "$PWD\packages;$PWD\apps"
-uvicorn api.app.main:app --app-dir apps --reload
-# 健康检查
-curl http://127.0.0.1:8000/v1/health
+git clone https://github.com/MiLab-Bit/BizAtlas.git
+cd BizAtlas
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -e ".[dev]"
 
-# 前端
+# 启动 API
+uvicorn apps.api.app.main:app --reload --port 8000
+
+# 启动前端
 cd apps/web && npm install && npm run dev
 ```
-
-- API 文档：`http://127.0.0.1:8000/docs`
-- Web 工作台：`http://127.0.0.1:5173`
-- 演示入口：`POST /v1/analyze`，`company_id` 直接传 `healthy` / `risky` / `defaulted` 试用三套演示案例
 
 ## 📊 当前状态
 
@@ -104,6 +90,7 @@ cd apps/web && npm install && npm run dev
 ---
 
 *产品名 商舆 · 工程代号 BizAtlas · 文档对齐 PRD v1.0*
+
 ## 本轮新增能力（2026-09-01）
 
 承接《竞品扫描与产品路线》，三级优先级（P0 进门门槛 / P1 差异化加深 / P2 规模化前置）已落地：
@@ -121,3 +108,51 @@ cd apps/web && npm install && npm run dev
 
 详见 `HANDOVER.md` 的「产品优化路线执行记录」段。
 
+---
+
+## Temporal 编排接入（2026-10）
+
+BizAtlas 的多 Agent 研判管线（RiskAnalysis）和尽调流程（DueDiligence）已接入 **Temporal Server v1.27** 进行编排，实现工作流持久化、自动重试、状态查询和人在回路审批。
+
+### 架构
+
+```
+FastAPI (:8000) → Temporal Client → Temporal Server (:7233)
+                                          │
+                                   namespace: bizatlas
+                                          │
+                              Worker (独立进程, systemd 管理)
+                              ├── RiskAnalysisWorkflow（五维风险研判）
+                              └── DueDiligenceWorkflow（尽调流程）
+                                   └── 12 个同步 Activity
+```
+
+### 代码结构
+
+```
+packages/bizatlas/temporal/
+├── common.py           # 跨边界数据结构
+├── activities.py       # 12 个同步 Activity（线程池执行）
+├── worker.py           # Worker 启动器（SandboxedWorkflowRunner + ThreadPool）
+├── client.py           # Temporal Client 工厂
+└── workflows/
+    ├── risk_analysis.py   # 五维风险研判管线
+    └── due_diligence.py   # 尽调工作流
+```
+
+### 设计原则
+
+- **Workflow 只做确定性编排**：顺序 / 分支 / 等待信号，所有会变的操作落到 Activity
+- **Activity 一律同步 def**：线程池执行，不阻塞事件循环
+- **Sandbox passthrough**：bizatlas.* 领域模块设为沙箱直通
+- **跨边界数据用 dict/dataclass**：不使用 pydantic 模型直传
+
+### 配置
+
+```bash
+# .env（不入 git）
+BIZATLAS_TEMPORAL_ENABLED=true
+TEMPORAL_ADDRESS=127.0.0.1:7233
+TEMPORAL_NAMESPACE=bizatlas
+TEMPORAL_TASK_QUEUE=bizatlas-task-queue
+```
