@@ -5,6 +5,18 @@
 
 ---
 
+## 在线部署 / Live Deployment
+
+| 环境 | 地址 |
+|---|---|
+| API 服务 | http://bizatlas.sy-realm.ltd |
+| Swagger 文档 | http://bizatlas.sy-realm.ltd/docs |
+
+> FastAPI 后端，部署于阿里云 ECS，经 Nginx 反代，DNS 走 Cloudflare（DNS-only 直连）。
+> 编排底座：Temporal（[temporal.sy-realm.ltd](http://temporal.sy-realm.ltd) 可视化 Workflow 执行）。
+
+
+
 ## 商舆能帮你解决什么
 
 金融分析师每天在做三件事：读资料、算风险、写报告。商舆把这三条流水线自动化：
