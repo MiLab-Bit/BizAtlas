@@ -121,3 +121,52 @@ cd apps/web && npm install && npm run dev
 
 详见 `HANDOVER.md` 的「产品优化路线执行记录」段。
 
+
+---
+
+## Temporal 编排接入（2026-10）
+
+BizAtlas 的多 Agent 研判管线（RiskAnalysis）和尽调流程（DueDiligence）已接入 **Temporal Server v1.27** 进行编排，实现工作流持久化、自动重试、状态查询和人在回路审批。
+
+### 架构
+
+```
+FastAPI (:8000) → Temporal Client → Temporal Server (:7233)
+                                          │
+                                   namespace: bizatlas
+                                          │
+                              Worker (独立进程, systemd 管理)
+                              ├── RiskAnalysisWorkflow（五维风险研判）
+                              └── DueDiligenceWorkflow（尽调流程）
+                                   └── 12 个同步 Activity
+```
+
+### 代码结构
+
+```
+packages/bizatlas/temporal/
+├── common.py           # 跨边界数据结构
+├── activities.py       # 12 个同步 Activity（线程池执行）
+├── worker.py           # Worker 启动器（SandboxedWorkflowRunner + ThreadPool）
+├── client.py           # Temporal Client 工厂
+└── workflows/
+    ├── risk_analysis.py   # 五维风险研判管线
+    └── due_diligence.py   # 尽调工作流
+```
+
+### 设计原则
+
+- **Workflow 只做确定性编排**：顺序 / 分支 / 等待信号，所有会变的操作落到 Activity
+- **Activity 一律同步 def**：线程池执行，不阻塞事件循环
+- **Sandbox passthrough**：bizatlas.* 领域模块设为沙箱直通
+- **跨边界数据用 dict/dataclass**：不使用 pydantic 模型直传
+
+### 配置
+
+```bash
+# .env（不入 git）
+BIZATLAS_TEMPORAL_ENABLED=true
+TEMPORAL_ADDRESS=127.0.0.1:7233
+TEMPORAL_NAMESPACE=bizatlas
+TEMPORAL_TASK_QUEUE=bizatlas-task-queue
+```
