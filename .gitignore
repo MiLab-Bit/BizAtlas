@@ -1,100 +1,29 @@
-# Python
+# Runtime
+*.pid
+*.log
+*.egg-info/
 __pycache__/
 *.pyc
-.venv/
-bizvenv/
+
+# Venv
 venv/
+.venv/
 
-# Local data & DB (runtime artifacts at repo root, NOT packages/bizatlas/data source dir)
-/data/
-*.sqlite
-*.db
-
-# Exports & integrity receipts (generated at runtime)
-/exports/
-*.integrity.json
-
-# Uploaded documents (runtime artifacts)
-/uploads/
-
-# Test / coverage
-.coverage
-.coverage*
-.cov*
-htmlcov/
-.pytest_cache/
-
-# Editor / OS
-.idea/
-.vscode/
-.DS_Store
-
-# Secrets (keep .env.example tracked, ignore real .env)
+# Env
 .env
 .env.*
 
-# WeChat mini-program private keys
-apps/miniprogram/private*.key
-*.wx*.key
-private.*.key
+# Data
+data/*.sqlite
+data/*.db
+*.db-journal
 
-# Frontend (Vite/React build artifacts & deps)
-node_modules/
+# Build
 dist/
-apps/web/dist/
-*.tsbuildinfo
-.vite/
+build/
+node_modules/
 
-# ---------------------------------------------------------------------------
-# 本地密钥 / 凭据（2026-08-27 起显式忽略，绝不入库）
-# ---------------------------------------------------------------------------
-.cf_token
-cfd_creds.json
-config.yml
-tunnel_token
-
-# ---------------------------------------------------------------------------
-# 手工备份 / 临时产物（内容已由 git 历史覆盖，不入库）
-# ---------------------------------------------------------------------------
-*.bak
-*.bak[0-9]*
-*.bak[0-9]*[a-z]
-*.orig
-*.rej
-backups/
-
-# ---------------------------------------------------------------------------
-# 部署辅助脚本（含 Cloudflare 账号/区域 ID，不入库）
-# ---------------------------------------------------------------------------
-notify_backend.sh
-
-# ---------------------------------------------------------------------------
-# 旧前端构建残留
-# ---------------------------------------------------------------------------
-apps/web/dist_mv_old/
-
-# ---------------------------------------------------------------------------
-# 回溯 / 测试运行产物（不应入库）
-# ---------------------------------------------------------------------------
-backtest_out.txt
-pytest_out.txt
-backtest_report.json
-backtest_report_metrics_v4.md
-
-# ---------------------------------------------------------------------------
-# 构建 / 回溯运行日志与临时产物
-# ---------------------------------------------------------------------------
-backtest*.log
-*backtest_progress*.jsonl
-fe_*.log
-vite_dbg.log
-apps/web/.npmrc
-
-vite_*.log
-
-# 回溯/测试运行产物（通用）
-backtest*.txt
-backtest*.json
-pytest*.txt
-empty.yml
-content/validation/backtest_report.json
+# Smoke tests (local only)
+smoke_*.py
+start_*.sh
+*.crypto_key
