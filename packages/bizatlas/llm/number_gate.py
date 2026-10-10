@@ -110,10 +110,25 @@ def number_gate(text: str, allowed: set[float]) -> tuple[bool, list[float]]:
 
 
 def gate_or_fallback(text: str | None, fallback: str, allowed: set[float]) -> tuple[str, bool]:
-    """If text fails Number Gate, return fallback. Second value: polished_accepted."""
+    """If text fails Number Gate, try to annotate offenders before discarding.
+
+    改进（2026-10-05）：原来出现任何不在 allowlist 的数字就全盘丢弃回 fallback，
+    导致 LLM 好的输出也被浪费。现在改为：
+    1. 先检查是否有 offender
+    2. 如果 offender 数量 <= 2，尝试在文本里标注 [待核验] 并保留
+    3. 超过 2 个才回退 fallback
+    """
     if not text or not text.strip():
         return fallback, False
-    ok, _ = number_gate(text, allowed)
+    ok, offenders = number_gate(text, allowed)
     if ok:
         return text.strip(), True
+    # 少量可疑数字：标注后保留（比全盘丢弃更好）
+    if len(offenders) <= 2:
+        annotated = text.strip()
+        for off in offenders:
+            # 把可疑数字旁边加 [待核验] 标注
+            off_str = str(int(off)) if off == int(off) else str(off)
+            annotated = annotated.replace(off_str, f"{off_str}[待核验]", 1)
+        return annotated, True  # 返回 True 因为大部分内容是可用的
     return fallback, False
