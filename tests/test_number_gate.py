@@ -68,13 +68,24 @@ def test_number_gate_ok_and_offenders():
 
 
 def test_gate_or_fallback():
+    # 新契约（2026-10-05 起）：未登记数字 ≤2 个时标注 [待核验] 保留；>2 个才回退模板句。
     allowed = {0.78}
+    # 全部在允许清单内 → 原样通过
     text, accepted = gate_or_fallback(" ratio 0.78 ", "fallback", allowed)
     assert accepted is True and text == "ratio 0.78"
+    # 单个可疑数字 → 标注后保留（不再整段丢弃）
     text2, accepted2 = gate_or_fallback(" ratio 0.99 ", "fallback", allowed)
-    assert accepted2 is False and text2 == "fallback"
+    assert accepted2 is True
+    assert text2 == "ratio 0.99[待核验]"
+    assert "fallback" not in text2
+    # 恰好 2 个可疑数字 → 仍在阈值内，标注保留
+    text3, accepted3 = gate_or_fallback(" a 0.11 b 0.22 ", "fallback", allowed)
+    assert accepted3 is True and "[待核验]" in text3
+    # 3 个可疑数字 → 超过阈值，整段回退
+    text4, accepted4 = gate_or_fallback(" a 0.11 b 0.22 c 0.33 ", "fallback", allowed)
+    assert accepted4 is False and text4 == "fallback"
     # None / 空白 → 回退，未采纳
-    t3, a3 = gate_or_fallback(None, "fb", allowed)
-    assert a3 is False and t3 == "fb"
-    t4, a4 = gate_or_fallback("   ", "fb", allowed)
-    assert a4 is False and t4 == "fb"
+    t5, a5 = gate_or_fallback(None, "fb", allowed)
+    assert a5 is False and t5 == "fb"
+    t6, a6 = gate_or_fallback("   ", "fb", allowed)
+    assert a6 is False and t6 == "fb"
