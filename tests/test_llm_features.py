@@ -25,13 +25,19 @@ def test_number_gate_rejects_unknown():
 
 
 def test_gate_or_fallback():
+    # 新契约（2026-10-05 起）：未登记数字 ≤2 个时标注 [待核验] 保留；>2 个才回退。
     allowed = {0.25, 25.0, 1.0}
     text, accepted = gate_or_fallback("阈值 25%", "回退句", allowed)
     assert accepted
     assert "25" in text
+    # 单个未登记数字（999）不再整段回退，而是标注后保留
     text2, accepted2 = gate_or_fallback("编造 999", "回退句", allowed)
-    assert not accepted2
-    assert text2 == "回退句"
+    assert accepted2 is True
+    assert "999" in text2 and "[待核验]" in text2
+    assert text2 != "回退句"
+    # >2 个未登记数字才回退
+    text3, accepted3 = gate_or_fallback("编造 999 与 888 与 777", "回退句", allowed)
+    assert accepted3 is False and text3 == "回退句"
 
 
 def test_intent_heuristic_analyze():
