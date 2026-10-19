@@ -1461,7 +1461,8 @@ _PUBLIC_PATHS = {
     "/v1/auth/me", "/v1/auth/rbac",
     "/v1/auth/model-providers/presets",
     "/v1/admin/bootstrap",  # 一次性首 admin 引导，自身校验 token，无 admin 时才可用
-    "/v1/healthz",
+    "/v1/health", "/v1/health/live", "/v1/health/ready",
+    "/v1/metrics",
 }
 
 class AuthEnforcementMiddleware(BaseHTTPMiddleware):

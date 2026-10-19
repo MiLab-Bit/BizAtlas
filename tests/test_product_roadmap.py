@@ -119,7 +119,7 @@ def test_mcp_call_analyze():
 from apps.api.app.main import app
 
 
-def test_endpoints_smoke():
+def test_endpoints_smoke(auth_disabled_env):
     with TestClient(app) as c:
         r = c.get("/v1/companies/risky/contagion")
         assert r.status_code == 200

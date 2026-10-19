@@ -61,7 +61,7 @@ def test_canary_pass_unit():
     assert _canary_pass({"id": "r", "canary": 0.0}, "x") is False
 
 
-def test_reload_endpoint():
+def test_reload_endpoint(auth_disabled_env):
     sys.path.insert(0, str(ROOT / "apps"))
     try:
         from fastapi.testclient import TestClient

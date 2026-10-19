@@ -46,6 +46,7 @@ def test_metrics_endpoint(client):
 @pytest.fixture
 def auth_client():
     secret = "test-secret-phase3"
+    saved = {k: os.environ.get(k) for k in ("BIZATLAS_AUTH_DISABLED", "BIZATLAS_AUTH_SECRET")}
     os.environ["BIZATLAS_AUTH_SECRET"] = secret
     os.environ["BIZATLAS_AUTH_DISABLED"] = "false"
     get_settings.cache_clear()
@@ -53,9 +54,12 @@ def auth_client():
 
     c = TestClient(app)
     yield c, secret
-    # 还原，避免影响其他用例
-    os.environ.pop("BIZATLAS_AUTH_SECRET", None)
-    os.environ["BIZATLAS_AUTH_DISABLED"] = "true"
+    # 还原 ambient（.env）配置，避免把演示态谎报成生产态
+    for k, v in saved.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
     get_settings.cache_clear()
 
 

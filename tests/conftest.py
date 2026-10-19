@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import atexit
 import os
+import pytest
 import shutil
 import tempfile
 from pathlib import Path
@@ -32,6 +33,8 @@ os.environ["SMTP_ENABLED"] = "false"
 os.environ["TIANYANCHA_TOKEN"] = ""
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+from bizatlas.config import get_settings
 
 
 def _isolate_test_dirs() -> Path:
@@ -63,6 +66,20 @@ _TEST_TMP_DIR = _isolate_test_dirs()
 
 
 def pytest_configure(config):
-    from bizatlas.config import get_settings
+    get_settings.cache_clear()
 
+
+@pytest.fixture
+def auth_disabled_env():
+    """强制开发态（AUTH_DISABLED + 无 secret），用完还原 ambient（.env）配置。"""
+    saved = {k: os.environ.get(k) for k in ("BIZATLAS_AUTH_DISABLED", "BIZATLAS_AUTH_SECRET")}
+    os.environ["BIZATLAS_AUTH_DISABLED"] = "true"
+    os.environ.pop("BIZATLAS_AUTH_SECRET", None)
+    get_settings.cache_clear()
+    yield
+    for k, v in saved.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
     get_settings.cache_clear()
