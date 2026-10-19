@@ -65,7 +65,7 @@ from bizatlas.identity.apikeys import (
     rotate_api_key,
 )
 from bizatlas.identity import model_providers as mp_store
-from bizatlas.llm.client import set_request_provider
+from bizatlas.llm.client import set_request_provider, set_llm_scope
 from bizatlas.identity.crypto import PROVIDER_PRESETS
 from bizatlas.observability import observe
 from bizatlas.observability.metrics import default_metrics
@@ -1013,6 +1013,7 @@ def chat(req: ChatRequest, principal: Principal = Depends(get_principal)) -> Env
     set_request_provider(
         {k: provider[k] for k in ("api_key", "base_url", "model")} if provider else None
     )
+    set_llm_scope(principal.user_id)
     try:
         result = handle_agent_message(
             req.message.strip(),
@@ -1049,6 +1050,7 @@ def chat_stream(req: ChatRequest, principal: Principal = Depends(get_principal))
     )
     provider_dict = {k: provider[k] for k in ("api_key", "base_url", "model")} if provider else None
     set_request_provider(provider_dict)
+    set_llm_scope(principal.user_id)
     message = req.message.strip()
     try:
         from bizatlas.llm.intent import classify_intent
@@ -1119,6 +1121,7 @@ def background_chat(req: BackgroundChatRequest, principal: Principal = Depends(g
     set_request_provider(
         {k: provider[k] for k in ("api_key", "base_url", "model")} if provider else None
     )
+    set_llm_scope(principal.user_id)
     try:
         data = background_reply(
             req.message,

@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import sys
 import time
 from contextvars import ContextVar
 from pathlib import Path
@@ -57,6 +58,42 @@ def set_request_provider(provider: Optional[dict[str, Any]]) -> None:
 
 def get_request_provider() -> Optional[dict[str, Any]]:
     return _request_provider.get()
+
+
+# ---- 每日 LLM 配额（平台网关；BYOK 不计）----
+_llm_scope: ContextVar[str] = ContextVar("bizatlas_llm_scope", default="anon")
+
+
+def set_llm_scope(scope: str) -> None:
+    """设置当前请求的配额 scope（用户 id）；随请求 ContextVar 隔离。"""
+    _llm_scope.set(scope or "anon")
+
+
+def _quota_db_path() -> str:
+    return os.getenv("BIZATLAS_QUOTA_DB") or os.path.join(
+        os.path.dirname(get_settings().bizatlas_db_path), "llm_quota.db"
+    )
+
+
+def _quota_ok() -> bool:
+    """平台网关每日配额；DB 异常 fail-closed（拒绝）。共享模块缺失则不阻断。"""
+    shared = os.getenv("OPENCLAW_SHARED_DIR", "/opt/shared")
+    if shared not in sys.path:
+        sys.path.insert(0, shared)
+    try:
+        from llm_quota import allow as _allow
+    except ModuleNotFoundError:  # 开发环境无共享模块时不阻断
+        return True
+    return _allow(_quota_db_path(), _llm_scope.get())
+
+
+def _quota_gate(provider: Optional[dict[str, Any]] | None) -> None:
+    """平台网关每日配额门；BYOK（带 api_key）不计；超限抛 LLMUnavailable。"""
+    eff = provider or get_request_provider()
+    if eff and eff.get("api_key"):
+        return
+    if not _quota_ok():
+        raise LLMUnavailable("daily LLM quota exhausted")
 
 
 def set_force_deterministic(flag: bool) -> None:
@@ -505,6 +542,7 @@ def chat_completion(
     provider: dict[str, Any] | None = None,
     stream: bool = False,
 ) -> Any:
+    _quota_gate(provider)  # 平台网关每日配额；超限抛 LLMUnavailable（调用方已降级）
     """OpenAI-compatible chat completions. Raises LLMUnavailable on soft failure.
 
     provider: 可选 {api_key, base_url, model}，用户自带凭证，优先于平台设置。
