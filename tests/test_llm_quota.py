@@ -1,14 +1,15 @@
-"""BizAtlas LLM 每日配额测试 — 不调 LLM（_post_with_retry / _resolve_provider / 缓存全打桩）。
+"""BizAtlas LLM 每日配额测试 — 不调 LLM（打桩 Gateway 客户端）。
 
-配额门位于 chat_completion 入口（_quota_gate）；BYOK（带 api_key）跳过，平台网关超限抛
-LLMUnavailable（product 调用方已降级）。缓存禁用，确保每次真实走配额门。
+bizatlas.llm.client 现已委托 openclaw_core.gateway.Gateway；本测试只替换 Gateway 的
+客户端构造与配额/缓存存储，验证 chat_completion 这一层的配额门、BYOK 跳过、
+缓存命中不计量行为（真实网关逻辑在 openclaw_core 黄金测试中覆盖）。
 
-运行（仓库根）：
-    venv/bin/python -m pytest tests/test_llm_quota.py -q
+运行（仓库根）：venv/bin/python -m pytest tests/test_llm_quota.py -q
 """
 from __future__ import annotations
 
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -17,66 +18,101 @@ for _p in ("/opt/bizatlas/packages", "/opt/shared"):
         sys.path.insert(0, _p)
 
 import bizatlas.llm.client as client  # noqa: E402
-from bizatlas.llm.client import chat_completion, LLMUnavailable, set_llm_scope  # noqa: E402
+from bizatlas.llm.client import (  # noqa: E402
+    chat_completion,
+    LLMUnavailable,
+    set_llm_scope,
+)
+from openclaw_core.gateway import _SqliteCache  # noqa: E402
+from openclaw_core.quota import QuotaGate  # noqa: E402
 
 
 class _Resp:
-    def raise_for_status(self) -> None:
-        pass
+    def __init__(self):
+        self.choices = [SimpleNamespace(message=SimpleNamespace(content="ok"))]
 
-    def json(self):
-        return {"choices": [{"message": {"content": "ok"}}]}
+
+class _Completions:
+    def __init__(self, fc):
+        self.fc = fc
+
+    async def create(self, **kw):
+        self.fc.calls.append(kw)
+        return _Resp()
+
+
+class _Chat:
+    def __init__(self, fc):
+        self.completions = _Completions(fc)
+
+
+class _FakeClient:
+    def __init__(self):
+        self.calls: list = []
+        self.chat = _Chat(self)
 
 
 @pytest.fixture()
 def fake_llm(monkeypatch, tmp_path):
-    """真实 chat_completion + _quota_gate 执行；仅供应商 HTTP 与缓存被替换。"""
-    calls: list = []
+    """真实 chat_completion 执行；仅 Gateway 的客户端构造与配额/缓存被替换。"""
+    qdb = str(tmp_path / "q.db")
+    cdb = str(tmp_path / "c.db")
+    gate = QuotaGate(qdb, limit=3)
+    client._gateway._quota = gate
+    client._gateway._cache = _SqliteCache(cdb, 86400, 2000)
+    fc = _FakeClient()
+    monkeypatch.setattr(client._gateway, "_client", lambda b, k: fc)
+    # 保证 _resolve 总能拿到平台网关地址（测试环境未必配置了真实 key）
+    monkeypatch.setenv("LLM_API_BASE", "http://fake-gateway")
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("BIZATLAS_QUOTA_DB", qdb)
+    return fc, gate
 
-    def _fake_post(url, headers, payload, timeout=45.0):
-        calls.append(payload)
-        return _Resp()
 
-    monkeypatch.setattr(client, "_post_with_retry", _fake_post)
-    monkeypatch.setattr(client, "_resolve_provider", lambda p: ("http://x", "k", "m"))
-    monkeypatch.setattr(client, "_cache_get", lambda k: None)
-    monkeypatch.setattr(client, "_cache_put", lambda *a, **k: None)
-    monkeypatch.setenv("BIZATLAS_QUOTA_DB", str(tmp_path / "q.db"))
-    return calls
+def _call(content: str = "hi", **kw):
+    return chat_completion([{"role": "user", "content": content}], **kw)
 
 
 def test_exhausted_raises(fake_llm):
     set_llm_scope("u1")
-    for _ in range(3):
-        assert chat_completion([{"role": "user", "content": "hi"}]) == "ok"
+    for i in range(3):
+        assert _call(content=f"m{i}") == "ok"  # 3 次不同消息，各自计量
     with pytest.raises(LLMUnavailable):
-        chat_completion([{"role": "user", "content": "hi"}])
-    assert len(fake_llm) == 3  # 第 4 次被配额门拦截，零供应商调用
+        _call(content="exhaust")  # 第 4 次超默认 3 → 配额门拦截
+    assert len(fake_llm[0].calls) == 3  # 第 4 次未触达客户端
 
 
 def test_byok_skips_quota(fake_llm):
     set_llm_scope("u1")
-    for _ in range(3):
-        assert chat_completion([{"role": "user", "content": "hi"}]) == "ok"
-    out = chat_completion(
-        [{"role": "user", "content": "hi"}],
+    for i in range(3):
+        assert _call(content=f"m{i}") == "ok"
+    out = _call(
+        content="byok",
         provider={"api_key": "own", "base_url": "http://own", "model": "m"},
     )
     assert out == "ok"
-    assert len(fake_llm) == 4  # BYOK 不计平台额度，仍放行
+    assert len(fake_llm[0].calls) == 4  # BYOK 不计平台额度，仍放行
 
 
 def test_scope_isolation(fake_llm):
     set_llm_scope("u1")
-    for _ in range(3):
-        assert chat_completion([{"role": "user", "content": "hi"}]) == "ok"
+    for i in range(3):
+        assert _call(content=f"u1-{i}") == "ok"  # u1 耗尽
     set_llm_scope("u2")
-    assert chat_completion([{"role": "user", "content": "hi"}]) == "ok"
+    assert _call(content="u2-1") == "ok"  # 不同 scope 独立配额
 
 
-def test_quota_env_unlimited(fake_llm, monkeypatch):
-    monkeypatch.setenv("LLM_QUOTA_LIMIT", "0")
+def test_quota_env_unlimited(fake_llm, monkeypatch, tmp_path):
+    client._gateway._quota = QuotaGate(str(tmp_path / "unlim.db"), limit=None)
     set_llm_scope("u1")
     for i in range(5):
-        assert chat_completion([{"role": "user", "content": f"m{i}"}]) == "ok"
-    assert len(fake_llm) == 5
+        assert _call(content=f"m{i}") == "ok"
+    assert len(fake_llm[0].calls) == 5
+
+
+def test_cache_hit_does_not_consume_quota(fake_llm):
+    set_llm_scope("u1")
+    assert _call(content="same") == "ok"  # 缓存未命中 → 计量 + 调用 + 写入缓存
+    assert _call(content="same") == "ok"  # 缓存命中 → 免费返回
+    assert len(fake_llm[0].calls) == 1
+    assert fake_llm[1].used("u1") == 1  # 缓存命中不计量
