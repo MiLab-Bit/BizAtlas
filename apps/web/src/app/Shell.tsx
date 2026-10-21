@@ -14,7 +14,7 @@ import {
   Bot,
   KeyRound,
 } from "lucide-react";
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { fetchHealth } from "@/shared/lib/api";
 import { fetchMe, getStoredUser, logout, type AuthUser } from "@/shared/lib/auth";
 import { cn } from "@/shared/lib/cn";

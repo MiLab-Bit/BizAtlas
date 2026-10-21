@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@/shared/ui";
 import { verifyEmail } from "@/shared/lib/api";
 

@@ -21,12 +21,19 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        // C1：按依赖分包，降低首屏单包体积（避免 >500KB 单 chunk 警告）
+        // C1：按依赖分组分包，降低首屏单包体积 + 提升缓存粒度
+        // pnpm 布局注意：模块 id 形如 .../node_modules/.pnpm/<pkg>@<ver>/node_modules/<pkg>/...
+        // 必须取最后一个 node_modules/ 之后的真实包名——早年按第一段取会得到 ".pnpm"，
+        // 导致全部依赖被并成一个 vendor-.pnpm 巨块（3MB+，缓存零粒度）。
         manualChunks(id: string) {
           if (!id.includes("node_modules")) return;
-          const parts = id.split("node_modules/")[1].split("/");
-          const name = parts[0].startsWith("@") ? parts[0] + "/" + parts[1] : parts[0];
-          return "vendor-" + name.replace(/[@/\\]/g, "_");
+          const seg = id.split("node_modules/").pop()!.split("/");
+          const name = seg[0].startsWith("@") ? `${seg[0]}/${seg[1]}` : seg[0];
+          if (/^(react|react-dom|scheduler)$/.test(name)) return "vendor-react";
+          if (/^(echarts|echarts-for-react|zrender)$/.test(name)) return "vendor-charts";
+          if (/^(@antv|@xyflow)/.test(name)) return "vendor-graph";
+          if (/^@radix-ui/.test(name)) return "vendor-radix";
+          return "vendor-misc";
         },
       },
     },

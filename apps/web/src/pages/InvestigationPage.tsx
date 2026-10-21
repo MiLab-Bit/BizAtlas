@@ -7,7 +7,7 @@ import {
   type MutableRefObject,
   type SetStateAction,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { useMutation } from "@tanstack/react-query";
 import { ArrowLeft, Network, Pause, Play, Radio, RotateCcw } from "lucide-react";
 import {

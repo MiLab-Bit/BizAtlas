@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@/shared/ui";
 import { login, register } from "@/shared/lib/auth";
 import { requestVerification } from "@/shared/lib/api";

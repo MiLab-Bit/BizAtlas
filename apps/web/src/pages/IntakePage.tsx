@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { ArrowRight, Building2, Send } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { postBackgroundChat, startBackgroundCheck } from "@/shared/lib/api";
 import { Button, GradeBadge, Input, StatusChip } from "@/shared/ui";
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@/shared/ui";
 import { requestPasswordReset, resetPassword } from "@/shared/lib/api";
 

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { Network, Radar, ScanSearch, Upload } from "lucide-react";
 import { useState } from "react";
 import { AttributionPanel } from "@/features/risk/AttributionPanel";
