@@ -10,11 +10,8 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import hashlib
-
-from fastapi import Depends, Header, HTTPException, Request
+from typing import Optional
 
 from bizatlas.auth.rbac import (
     Action,
@@ -27,6 +24,7 @@ from bizatlas.auth.rbac import (
 )
 from bizatlas.config import get_settings
 from bizatlas.identity import apikeys as _apikeys
+from fastapi import Depends, Header, HTTPException, Request
 
 
 def get_principal(request: Request, authorization: Optional[str] = Header(default=None)) -> Principal:

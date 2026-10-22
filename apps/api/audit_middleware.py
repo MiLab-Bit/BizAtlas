@@ -11,9 +11,8 @@ from __future__ import annotations
 
 import time
 
-from starlette.middleware.base import BaseHTTPMiddleware
-
 from bizatlas.identity.service import audit_api_call
+from starlette.middleware.base import BaseHTTPMiddleware
 
 _SKIP_PATHS = {"/v1/healthz", "/v1/health", "/v1/health/live"}
 

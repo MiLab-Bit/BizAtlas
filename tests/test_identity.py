@@ -9,7 +9,6 @@ import os
 import tempfile
 
 import pytest
-
 from bizatlas.config import get_settings
 from bizatlas.data.db import init_db
 from bizatlas.identity import (
@@ -131,6 +130,7 @@ def logged_in_client(identity_db):
         pass
 
     from fastapi.testclient import TestClient
+
     from apps.api.app.main import app
 
     c = TestClient(app)
@@ -150,6 +150,7 @@ def logged_in_client(identity_db):
 def test_api_anonymous_me_when_no_token(identity_db, auth_disabled_env):
     """开发态（auth_disabled）无令牌 → 匿名 ADMIN。"""
     from fastapi.testclient import TestClient
+
     from apps.api.app.main import app
 
     c = TestClient(app)
@@ -160,6 +161,7 @@ def test_api_anonymous_me_when_no_token(identity_db, auth_disabled_env):
 
 def test_api_rbac_matrix(identity_db):
     from fastapi.testclient import TestClient
+
     from apps.api.app.main import app
 
     c = TestClient(app)
@@ -171,6 +173,7 @@ def test_api_rbac_matrix(identity_db):
 
 def test_api_refresh_endpoint(identity_db):
     from fastapi.testclient import TestClient
+
     from apps.api.app.main import app
 
     c = TestClient(app)

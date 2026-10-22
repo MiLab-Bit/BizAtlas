@@ -2,10 +2,9 @@
 import asyncio
 import time
 
-from temporalio.client import Client
-
 from bizatlas.temporal.common import RiskAnalysisInput
 from bizatlas.temporal.workflows.risk_analysis import RiskAnalysisWorkflow
+from temporalio.client import Client
 
 TQ = "bizatlas-task-queue"
 

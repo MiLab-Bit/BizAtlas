@@ -10,10 +10,10 @@ sys.modules.setdefault("akshare", _fake_ak)
 import pytest
 
 pytest.importorskip("pandas")
-import pandas as pd
 from unittest.mock import patch
 
 import bizatlas.data.providers_news_akshare as ns
+import pandas as pd
 
 
 def test_configured():

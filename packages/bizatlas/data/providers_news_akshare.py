@@ -42,7 +42,6 @@ def fetch_company_news(symbol: str, *, limit: int = 20) -> list[dict[str, Any]]:
     if df is None or df.empty:
         raise RuntimeError("AKShare 新闻返回空数据")
 
-    cols = set(df.columns)
     news: list[dict[str, Any]] = []
     for _, row in df.head(limit).iterrows():
         title = str(row.get("新闻标题") or "")

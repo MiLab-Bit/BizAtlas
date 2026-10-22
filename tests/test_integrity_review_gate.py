@@ -6,9 +6,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "packages"))
 
-from bizatlas.contracts.integrity import sign, verify, tamper_detected
-from bizatlas.data.db import init_db
+from bizatlas.contracts.integrity import sign, tamper_detected, verify
 from bizatlas.contracts.models import AnalyzeRequest, RiskResult
+from bizatlas.data.db import init_db
 from bizatlas.evaluation import check_release_gate
 from bizatlas.orchestrator.analyze import run_analyze
 from bizatlas.workflow.due_diligence import (
@@ -16,7 +16,6 @@ from bizatlas.workflow.due_diligence import (
     review_due_diligence,
     start_due_diligence,
 )
-
 
 # ---------- A. 报告防篡改哈希链 ----------
 

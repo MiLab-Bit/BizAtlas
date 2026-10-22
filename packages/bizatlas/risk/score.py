@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-
 from datetime import UTC, datetime
 
 from bizatlas.contracts.models import (
@@ -15,7 +14,7 @@ from bizatlas.contracts.models import (
     VetoInfo,
 )
 from bizatlas.risk.behavioral import compute_behavioral
-from bizatlas.risk.calibration import calibrate, master_scale_from_pd
+from bizatlas.risk.calibration import calibrate
 from bizatlas.risk.distress import compute_distress
 from bizatlas.risk.reason_codes import build_reason_codes
 

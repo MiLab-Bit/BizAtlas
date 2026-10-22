@@ -2,46 +2,22 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import httpx
 import json
 import os
 import queue
 import threading
 import time
 from contextlib import asynccontextmanager
-from typing import Literal
+from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel, Field
-
+import httpx
+from bizatlas.agents.pipeline import run_analysis_pipeline
+from bizatlas.auth.rbac import Action, Principal, Role
 from bizatlas.config import get_settings
 from bizatlas.contracts.models import AnalyzeRequest, Envelope, HealthData
 from bizatlas.data import repo
-from bizatlas.data.db import init_db, get_connection
+from bizatlas.data.db import get_connection, init_db
 from bizatlas.data.registry import provider_health_list
-from bizatlas.ingest.fixtures import list_fixtures
-from bizatlas.ingest.upload import ingest_metrics_file
-from bizatlas.kg.graph import build_guarantee_graph
-from bizatlas.orchestrator.analyze import (
-    generate_credit_report,
-    generate_onepager_report,
-    run_analyze,
-)
-from bizatlas.agents.pipeline import run_analysis_pipeline
-from bizatlas.orchestrator.trace import build_trace
-from bizatlas.rules.nl_compiler import compile_rule_from_nl
-from bizatlas.rules.store import activate_rule, load_all_rules, save_pilot_rule
-from bizatlas.workflow.due_diligence import (
-    advance_due_diligence,
-    get_due_diligence,
-    review_due_diligence,
-    start_due_diligence,
-)
-
-from bizatlas.auth.rbac import Action, Principal, Role
 from bizatlas.identity import (
     IdentityError,
     authenticate,
@@ -57,6 +33,7 @@ from bizatlas.identity import (
     send_verification_email,
     verify_email,
 )
+from bizatlas.identity import model_providers as mp_store
 from bizatlas.identity.apikeys import (
     create_api_key,
     generate_api_key,
@@ -64,25 +41,48 @@ from bizatlas.identity.apikeys import (
     revoke_api_key,
     rotate_api_key,
 )
-from bizatlas.identity import model_providers as mp_store
-from bizatlas.llm.client import set_request_provider, set_llm_scope
 from bizatlas.identity.crypto import PROVIDER_PRESETS
+from bizatlas.ingest.fixtures import list_fixtures
+from bizatlas.ingest.upload import ingest_metrics_file
+from bizatlas.kg.graph import build_guarantee_graph
+from bizatlas.llm.client import set_llm_scope, set_request_provider
 from bizatlas.observability import observe
 from bizatlas.observability.metrics import default_metrics
+from bizatlas.orchestrator.analyze import (
+    generate_credit_report,
+    generate_onepager_report,
+    run_analyze,
+)
+from bizatlas.orchestrator.trace import build_trace
+from bizatlas.rules.nl_compiler import compile_rule_from_nl
+from bizatlas.rules.store import activate_rule, load_all_rules, save_pilot_rule
 from bizatlas.service.health import liveness, readiness
 from bizatlas.tools.builtins import register_default_tools
 from bizatlas.tools.permissions import matrix_summary
+from bizatlas.workflow.due_diligence import (
+    advance_due_diligence,
+    get_due_diligence,
+    review_due_diligence,
+    start_due_diligence,
+)
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse, StreamingResponse
+from pydantic import BaseModel, Field
+
+from apps.api.audit_middleware import AuditMiddleware
 from apps.api.auth_deps import get_principal, guard, guard_review, resolve_principal
 from apps.api.observability_middleware import ObservabilityMiddleware
-from apps.api.audit_middleware import AuditMiddleware
 from apps.api.rate_limit import (
-    get_client_ip as _client_ip,
+    LOGIN_LIMIT,
+    PW_RESET_LIMIT,
+    REGISTER_LIMIT,
+    RESET_PW_LIMIT,
     rate_limit_identity,
     rate_limit_ip,
-    LOGIN_LIMIT,
-    REGISTER_LIMIT,
-    PW_RESET_LIMIT,
-    RESET_PW_LIMIT,
+)
+from apps.api.rate_limit import (
+    get_client_ip as _client_ip,
 )
 
 settings = get_settings()
@@ -1451,11 +1451,11 @@ async def quick_upload_analyze(
 
 
 # —— M1 安全：全局鉴权强制（非公开 /v1/* 必须携带有效 Bearer 令牌）——
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse
 from bizatlas.auth.rbac import TokenInvalid, verify_token
 from bizatlas.config import get_settings
 from bizatlas.identity import apikeys as _apikeys
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
 _PUBLIC_PATHS = {
     "/v1/auth/register", "/v1/auth/login", "/v1/auth/refresh",
@@ -1497,6 +1497,7 @@ app.add_middleware(AuditMiddleware)
 app.add_middleware(AuthEnforcementMiddleware)
 
 from apps.api.app.routers_extra import router as _extra_router
+
 app.include_router(_extra_router)
 
 

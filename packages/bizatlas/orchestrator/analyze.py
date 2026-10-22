@@ -3,6 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
+from bizatlas.contracts.integrity import sign
 from bizatlas.contracts.models import AnalyzeRequest, MetricValue, RiskResult
 from bizatlas.data import repo
 from bizatlas.industry.benchmarks import compare_to_industry
@@ -18,7 +19,6 @@ from bizatlas.risk.conflicts import detect_conflicts
 from bizatlas.risk.score import enrich_risk, score_risk
 from bizatlas.risk.stress import run_stress
 from bizatlas.rules.engine import RuleEngine
-from bizatlas.contracts.integrity import sign
 
 
 def _resolve_inputs(

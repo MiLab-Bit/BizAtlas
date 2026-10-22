@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+from openclaw_core.temporal import run_worker
+
 from bizatlas.config import get_settings
 from bizatlas.temporal.activities import (
     build_trace_activity,
@@ -22,7 +24,6 @@ from bizatlas.temporal.activities import (
 )
 from bizatlas.temporal.workflows.due_diligence import DueDiligenceWorkflow
 from bizatlas.temporal.workflows.risk_analysis import RiskAnalysisWorkflow
-from openclaw_core.temporal import run_worker
 
 
 def run() -> None:

@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import time
 
+from bizatlas.observability.logging import get_logger, new_request_id, set_request_id
+from bizatlas.observability.metrics import default_metrics
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
-
-from bizatlas.observability.logging import get_logger, new_request_id, set_request_id
-from bizatlas.observability.metrics import default_metrics
 
 
 class ObservabilityMiddleware(BaseHTTPMiddleware):

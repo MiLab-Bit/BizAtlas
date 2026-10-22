@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import uuid
+from pathlib import Path
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 

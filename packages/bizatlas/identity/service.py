@@ -19,15 +19,15 @@ from typing import Optional
 from bizatlas.auth.rbac import Role, issue_token
 from bizatlas.config import get_settings
 from bizatlas.data.db import get_connection
+from bizatlas.identity.email import (
+    build_password_reset_email,
+    build_verification_email,
+    default_sender,
+    reset_link,
+    verification_link,
+)
 from bizatlas.identity.models import User
 from bizatlas.identity.passwords import hash_password, verify_password
-from bizatlas.identity.email import (
-    default_sender,
-    build_verification_email,
-    build_password_reset_email,
-    verification_link,
-    reset_link,
-)
 from bizatlas.tools.permissions import ROLE_SCOPES
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")

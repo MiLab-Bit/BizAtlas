@@ -19,7 +19,6 @@
 import os
 
 import pytest
-
 from bizatlas.config import get_settings
 
 _LLM_ENV_KEYS = ("LLM_API_KEY", "LLM_API_BASE")

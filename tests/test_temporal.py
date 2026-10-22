@@ -20,7 +20,6 @@ from dataclasses import asdict
 
 import pytest
 
-
 # ======================================================================
 # 纯逻辑（不依赖 temporalio）
 # ======================================================================
@@ -153,9 +152,6 @@ def test_risk_analysis_workflow_integration():
     pytest.importorskip("temporalio")
     import concurrent.futures
 
-    from temporalio.client import Client
-    from temporalio.worker import Worker
-
     from bizatlas.config import get_settings
     from bizatlas.temporal.activities import (
         build_trace_activity,
@@ -167,6 +163,8 @@ def test_risk_analysis_workflow_integration():
     )
     from bizatlas.temporal.common import RiskAnalysisInput
     from bizatlas.temporal.workflows.risk_analysis import RiskAnalysisWorkflow
+    from temporalio.client import Client
+    from temporalio.worker import Worker
 
     settings = get_settings()
 

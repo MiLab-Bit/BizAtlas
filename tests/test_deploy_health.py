@@ -5,10 +5,9 @@ from __future__ import annotations
 import os
 
 import pytest
-from fastapi.testclient import TestClient
-
 from bizatlas.auth.rbac import Role, issue_token
 from bizatlas.config import get_settings
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture

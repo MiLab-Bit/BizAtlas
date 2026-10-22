@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from bizatlas.observability import observe
 from bizatlas.tools.builtins import _vision_parse, register_default_tools
 from bizatlas.tools.circuit import get_breaker

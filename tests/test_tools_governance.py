@@ -10,8 +10,7 @@
 from __future__ import annotations
 
 import pytest
-
-from bizatlas.tools.circuit import CircuitBreaker, CircuitOpen, get_breaker
+from bizatlas.tools.circuit import CircuitBreaker, CircuitOpen
 from bizatlas.tools.permissions import (
     AccessDenied,
     Role,
@@ -20,8 +19,7 @@ from bizatlas.tools.permissions import (
     role_has_scope,
 )
 from bizatlas.tools.registry import ToolRegistry, ToolSpec
-from bizatlas.tools.sandbox import SandboxTimeout, run_in_sandbox
-from bizatlas.tools.sandbox import _demo_fail, _demo_ok, _demo_slow
+from bizatlas.tools.sandbox import SandboxTimeout, _demo_fail, _demo_ok, _demo_slow, run_in_sandbox
 
 
 # —— 权限矩阵 ——

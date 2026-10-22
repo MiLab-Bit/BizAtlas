@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "packages"))
 
-from bizatlas.contracts.models import AnalyzeRequest, DataTier, MetricValue, MetricSource
+from bizatlas.contracts.models import AnalyzeRequest, DataTier, MetricSource, MetricValue
 from bizatlas.credit.decision import build_credit_decision
 from bizatlas.data.db import init_db
 from bizatlas.orchestrator.analyze import run_analyze

@@ -188,7 +188,6 @@ def vision_ocr_available() -> bool:
 def _encode_image(path: str) -> tuple[str, str]:
     import base64
     import mimetypes
-
     from pathlib import Path
 
     p = Path(path)

@@ -59,7 +59,6 @@ def test_tracing_records_span():
 
 
 def test_observe_records_metrics():
-    m = default_tracer  # placeholder to satisfy import; use metrics below
     from bizatlas.observability.metrics import default_metrics
 
     default_metrics().reset()

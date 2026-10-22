@@ -18,10 +18,11 @@ from __future__ import annotations
 
 import atexit
 import os
-import pytest
 import shutil
 import tempfile
 from pathlib import Path
+
+import pytest
 
 # 邮箱验证默认关闭：注册即视为已验证（向后兼容旧演示/测试无感）。
 os.environ["EMAIL_VERIFICATION_ENABLED"] = "false"
