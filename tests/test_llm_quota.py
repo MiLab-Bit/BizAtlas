@@ -19,8 +19,8 @@ for _p in ("/opt/bizatlas/packages", "/opt/shared"):
 
 import bizatlas.llm.client as client  # noqa: E402
 from bizatlas.llm.client import (  # noqa: E402
-    chat_completion,
     LLMUnavailable,
+    chat_completion,
     set_llm_scope,
 )
 from openclaw_core.gateway import _SqliteCache  # noqa: E402

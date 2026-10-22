@@ -6,12 +6,11 @@
 import sqlite3
 
 import pytest
-from fastapi.testclient import TestClient
-
 
 # ---------- 数据源优雅降级（P0-③） ----------
 from bizatlas.data.providers_credit_bureau import fetch_credit_report
 from bizatlas.data.providers_invoice import extract_invoice
+from fastapi.testclient import TestClient
 
 
 def test_credit_bureau_empty_name():

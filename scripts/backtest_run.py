@@ -30,7 +30,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "packages"))
 
-from bizatlas.contracts.models import MetricValue, MetricSource, DataTier  # noqa: E402
+from bizatlas.contracts.models import DataTier, MetricSource, MetricValue  # noqa: E402
 from bizatlas.risk.score import score_risk  # noqa: E402
 from bizatlas.rules.engine import RuleEngine, load_rules  # noqa: E402
 

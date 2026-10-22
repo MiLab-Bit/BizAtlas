@@ -6,11 +6,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "packages"))
 
+from bizatlas.contracts.models import AnalyzeRequest
 from bizatlas.data import repo
 from bizatlas.data.db import init_db
 from bizatlas.ingest.upload import ingest_metrics_file
 from bizatlas.orchestrator.analyze import generate_onepager_report, run_analyze
-from bizatlas.contracts.models import AnalyzeRequest
 
 
 def test_upload_csv_analyze_and_report(tmp_path, monkeypatch):

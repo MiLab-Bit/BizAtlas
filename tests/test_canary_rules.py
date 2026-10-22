@@ -1,6 +1,5 @@
 """规则灰度（canary）与热更新（reload 端点）测试。"""
 
-import os
 import sys
 from pathlib import Path
 
@@ -65,6 +64,7 @@ def test_reload_endpoint(auth_disabled_env):
     sys.path.insert(0, str(ROOT / "apps"))
     try:
         from fastapi.testclient import TestClient
+
         from apps.api.app.main import app
     except Exception as e:  # noqa: BLE001
         import pytest

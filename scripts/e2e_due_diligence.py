@@ -2,10 +2,9 @@
 import asyncio
 import time
 
-from temporalio.client import Client
-
 from bizatlas.temporal.common import DueDiligenceInput
 from bizatlas.temporal.workflows.due_diligence import DueDiligenceWorkflow
+from temporalio.client import Client
 
 TQ = "bizatlas-task-queue"
 

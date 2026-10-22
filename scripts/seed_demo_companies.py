@@ -389,9 +389,9 @@ def main() -> int:
             zone = "破产区" if z_val < 1.23 else ("灰色区" if z_val < 2.9 else "安全区")
             print(f"    Z值(Altman)={z_val:.4f} ({zone})  "
                   f"X1={alt['X1']:.3f} X2={alt['X2']:.3f} X3={alt['X3']:.3f} X4'={alt['X4p']:.3f}")
-        print(f"    利息保障倍数=" + (f"{ic:.3f}" if ic is not None else "跳过(财务费用<=0)"))
+        print("    利息保障倍数=" + (f"{ic:.3f}" if ic is not None else "跳过(财务费用<=0)"))
         cl = next((m[1] for m in metrics if m[0] == "连续亏损年数"), None)
-        print(f"    连续亏损年数=" + (str(cl) if cl is not None else "0/无"))
+        print("    连续亏损年数=" + (str(cl) if cl is not None else "0/无"))
         if skipped:
             print(f"    跳过/备注: {', '.join(skipped)}")
 

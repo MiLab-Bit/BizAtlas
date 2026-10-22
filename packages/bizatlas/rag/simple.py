@@ -247,7 +247,7 @@ def stream_ask_company(
     }
 
     try:
-        from bizatlas.llm.client import chat_completion, llm_configured
+        from bizatlas.llm.client import LLMUnavailable, chat_completion, llm_configured
 
         if llm_configured():
             for tok in chat_completion(

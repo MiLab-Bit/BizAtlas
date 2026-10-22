@@ -32,8 +32,8 @@ TOOLS: list[dict[str, Any]] = [
 
 
 def _analyze(company_id: str, intent: str = "analyze_risk") -> dict[str, Any]:
-    from bizatlas.orchestrator.analyze import run_analyze
     from bizatlas.contracts.models import AnalyzeRequest
+    from bizatlas.orchestrator.analyze import run_analyze
 
     result = run_analyze(AnalyzeRequest(company_id=company_id, intent=intent))
     risk = result.get("risk") or {}

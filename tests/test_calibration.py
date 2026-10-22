@@ -2,13 +2,13 @@
 import math
 
 from bizatlas.risk.calibration import (
-    calibrate,
-    logistic_pd,
-    auc,
-    ks,
-    fit,
     CAL_A,
     CAL_B,
+    auc,
+    calibrate,
+    fit,
+    ks,
+    logistic_pd,
 )
 
 

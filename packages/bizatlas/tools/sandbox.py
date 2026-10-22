@@ -16,8 +16,8 @@ from __future__ import annotations
 import importlib
 import multiprocessing as mp
 import os
-import traceback
 import time
+import traceback
 from typing import Any, Callable
 
 

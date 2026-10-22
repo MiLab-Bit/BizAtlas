@@ -4,7 +4,11 @@ from typing import Any
 
 from bizatlas.contracts.models import AnalyzeRequest
 from bizatlas.llm.intent import classify_intent
-from bizatlas.orchestrator.analyze import generate_credit_report, generate_onepager_report, run_analyze
+from bizatlas.orchestrator.analyze import (
+    generate_credit_report,
+    generate_onepager_report,
+    run_analyze,
+)
 from bizatlas.rag.simple import ask_company
 from bizatlas.rules.nl_compiler import compile_rule_from_nl
 from bizatlas.rules.store import save_pilot_rule

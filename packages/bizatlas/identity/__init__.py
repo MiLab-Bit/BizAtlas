@@ -40,4 +40,8 @@ __all__ = [
     "role_scopes",
     "hash_password",
     "verify_password",
+    "request_password_reset",
+    "reset_password",
+    "send_verification_email",
+    "verify_email",
 ]

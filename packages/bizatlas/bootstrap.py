@@ -54,8 +54,9 @@ def seed_platform_llm_from_env() -> dict[str, Any]:
             slot="text",
         )
         # 直接标 active，免人工 /test 一步（密钥来自运维可控的 .env）
-        from bizatlas.identity.model_providers import update_status
         import time
+
+        from bizatlas.identity.model_providers import update_status
 
         update_status(
             pid,

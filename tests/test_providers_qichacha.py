@@ -1,9 +1,8 @@
 import hashlib
-
-import pytest
 from unittest.mock import patch
 
 import bizatlas.data.providers_qichacha as qc
+import pytest
 
 
 def test_sign_deterministic():

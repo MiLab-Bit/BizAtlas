@@ -15,8 +15,7 @@ workflow.execute_activity 落到 Activity。
 
 from __future__ import annotations
 
-import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 from temporalio import workflow
@@ -127,7 +126,7 @@ class RiskAnalysisWorkflow:
                 "agents": {a.get("role"): a for a in agent_results},
                 "classification": cls_out.get("output"),
                 "data_gaps": (plan_out.get("output") or {}).get("data_gaps") or [],
-                "research_findings": (researcher_out := research_out.get("output") or {}).get("findings") or [],
+                "research_findings": (research_out.get("output") or {}).get("findings") or [],
                 "disclosures": (writer_out.get("output") or {}).get("disclosures") or [],
                 "narrative": (writer_out.get("output") or {}).get("narrative") or {},
                 "pipeline_mode": pipeline_mode,

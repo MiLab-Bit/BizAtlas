@@ -10,10 +10,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable
 
-from bizatlas.agents.base import Disclosure
 from bizatlas.tools.base import ToolResult
 from bizatlas.tools.circuit import CircuitOpen, get_breaker
 from bizatlas.tools.permissions import AccessDenied, Role, Scope, require_scope

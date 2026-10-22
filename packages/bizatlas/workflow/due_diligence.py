@@ -12,7 +12,6 @@ from bizatlas.data import repo
 from bizatlas.ingest.fixtures import load_fixture_company
 from bizatlas.orchestrator.analyze import generate_onepager_report, run_analyze
 
-
 # 需要强制人工复核的高风险等级（研判/出报告时打标，提交前必须 approve）
 REVIEW_REQUIRED_GRADES = {"ORANGE", "RED", "BLACK"}
 REVIEW_DECISIONS = {"approve", "reject", "return"}

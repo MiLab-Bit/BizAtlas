@@ -7,8 +7,6 @@ CI 不配置 LLM，compile_rule_from_nl 走 _compile_regex 分支；
 from __future__ import annotations
 
 import pytest
-
-from bizatlas.rules import nl_compiler as nc
 from bizatlas.rules.nl_compiler import (
     _finalize_rule,
     _validate_llm_rule,

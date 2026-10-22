@@ -120,7 +120,7 @@ def touch_api_key(key_id: str) -> None:
 
 def principal_for_owner(public_id: str):
     """为 API Key 所属账号构造 RBAC Principal（user_id 与人工 JWT 一致）。"""
-    from bizatlas.auth.rbac import Principal, Role, ROLE_SCOPES
+    from bizatlas.auth.rbac import ROLE_SCOPES, Principal, Role
 
     conn = get_connection()
     try:

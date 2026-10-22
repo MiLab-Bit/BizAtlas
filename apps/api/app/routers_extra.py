@@ -13,18 +13,17 @@ from __future__ import annotations
 
 from typing import Optional
 
+from bizatlas.analytics import feedback as feedback_svc
+from bizatlas.contracts.models import AnalyzeRequest, Envelope
+from bizatlas.data.db import get_connection
+from bizatlas.kg.contagion import compute_contagion
+from bizatlas.observability.metrics import default_metrics
+from bizatlas.orchestrator.analyze import run_analyze
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
-from bizatlas.config import get_settings
-from bizatlas.contracts.models import AnalyzeRequest, Envelope
-from bizatlas.kg.contagion import compute_contagion
-from bizatlas.observability.metrics import default_metrics
 from apps.api.auth_deps import get_principal
-from bizatlas.analytics import feedback as feedback_svc
-from bizatlas.data.db import get_connection
-from bizatlas.orchestrator.analyze import run_analyze
 
 router = APIRouter()
 

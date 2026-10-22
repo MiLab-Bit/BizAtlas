@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from bizatlas.data.registry import _env_ready, load_registry, provider_health_list
 
 

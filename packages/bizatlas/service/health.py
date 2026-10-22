@@ -36,8 +36,8 @@ def readiness() -> dict[str, Any]:
         db_ok = False
         db_error = str(exc)
 
-    from bizatlas.llm.client import llm_configured
     from bizatlas.bootstrap import last_bootstrap
+    from bizatlas.llm.client import llm_configured
 
     boot = last_bootstrap()
     compliance = boot.get("compliance") or {}

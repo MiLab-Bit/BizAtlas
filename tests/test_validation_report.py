@@ -5,10 +5,9 @@ load_backtest_report 在报告缺失/损坏时显式披露、不编造数字；
 """
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from unittest.mock import patch
-
-import json
 
 from bizatlas.validation import report as rep
 

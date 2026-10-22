@@ -11,7 +11,6 @@ import os
 import tempfile
 
 import pytest
-
 from bizatlas.config import get_settings
 from bizatlas.data.db import get_connection, init_db
 from bizatlas.identity import (
@@ -20,7 +19,6 @@ from bizatlas.identity import (
     register,
     request_password_reset,
     reset_password,
-    send_verification_email,
     verify_email,
 )
 from bizatlas.identity.email import ConsoleEmailSender

@@ -17,10 +17,9 @@ import os
 from contextvars import ContextVar
 from typing import Any, Iterator, Optional
 
-from openclaw_core.gateway import Gateway, QuotaExceeded, LLMUnavailable
+from openclaw_core.gateway import Gateway, LLMUnavailable, QuotaExceeded
 
 from bizatlas.config import get_settings
-
 
 __all__ = [
     "LLMUnavailable",
