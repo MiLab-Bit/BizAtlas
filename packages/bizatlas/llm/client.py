@@ -1,13 +1,13 @@
-"""bizatlas.llm.client — 委托 openclaw_core.gateway.Gateway。
+"""bizatlas.llm.client — 委托 hermes_core.gateway.Gateway。
 
 配额门控 / 并发闸门 / 指数退避 / 响应缓存 / provider 解析 / JSON 兜底
-全部下沉到共享库 openclaw_core；本文件只保留产品级对外符号：
+全部下沉到共享库 hermes_core；本文件只保留产品级对外符号：
 
   chat_completion, LLMUnavailable, llm_configured,
   set_request_provider, get_request_provider, set_llm_scope,
   set_force_deterministic, gate_stats
 
-调用点零改动。LLMUnavailable 与 openclaw_core 的同类异常保持同一身份，
+调用点零改动。LLMUnavailable 与 hermes_core 的同类异常保持同一身份，
 因此调用方 `except LLMUnavailable` 仍能捕获平台/网关/配额/上游各类软失败。
 """
 from __future__ import annotations
@@ -17,7 +17,7 @@ import os
 from contextvars import ContextVar
 from typing import Any, Iterator, Optional
 
-from openclaw_core.gateway import Gateway, LLMUnavailable, QuotaExceeded
+from hermes_core.gateway import Gateway, LLMUnavailable, QuotaExceeded
 
 from bizatlas.config import get_settings
 
@@ -190,5 +190,5 @@ def _chat_completion_stream_sync(
 
 
 def gate_stats() -> dict[str, int]:
-    """并发闸门观测计数（兼容性保留；统一网关后由 openclaw_core 内部统计）。"""
+    """并发闸门观测计数（兼容性保留；统一网关后由 hermes_core 内部统计）。"""
     return {"acquired": 0, "waited": 0, "timeouts": 0, "retries": 0}
