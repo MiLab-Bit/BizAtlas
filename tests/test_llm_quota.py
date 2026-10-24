@@ -1,8 +1,8 @@
 """BizAtlas LLM 每日配额测试 — 不调 LLM（打桩 Gateway 客户端）。
 
-bizatlas.llm.client 现已委托 openclaw_core.gateway.Gateway；本测试只替换 Gateway 的
+bizatlas.llm.client 现已委托 hermes_core.gateway.Gateway；本测试只替换 Gateway 的
 客户端构造与配额/缓存存储，验证 chat_completion 这一层的配额门、BYOK 跳过、
-缓存命中不计量行为（真实网关逻辑在 openclaw_core 黄金测试中覆盖）。
+缓存命中不计量行为（真实网关逻辑在 hermes_core 黄金测试中覆盖）。
 
 运行（仓库根）：venv/bin/python -m pytest tests/test_llm_quota.py -q
 """
@@ -23,8 +23,8 @@ from bizatlas.llm.client import (  # noqa: E402
     chat_completion,
     set_llm_scope,
 )
-from openclaw_core.gateway import _SqliteCache  # noqa: E402
-from openclaw_core.quota import QuotaGate  # noqa: E402
+from hermes_core.gateway import _SqliteCache  # noqa: E402
+from hermes_core.quota import QuotaGate  # noqa: E402
 
 
 class _Resp:

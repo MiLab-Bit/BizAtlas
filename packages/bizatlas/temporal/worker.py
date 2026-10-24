@@ -1,11 +1,11 @@
-"""Temporal Worker 启动器（统一到 openclaw_core.temporal.run_worker）。
+"""Temporal Worker 启动器（统一到 hermes_core.temporal.run_worker）。
 
 注册 Workflow 与 Activity，连接 Temporal 集群并开始轮询任务队列。
 独立进程运行（与 FastAPI 分离），由 scripts/run_worker.py 或 `bizatlas-worker` 入口拉起。
 """
 from __future__ import annotations
 
-from openclaw_core.temporal import run_worker
+from hermes_core.temporal import run_worker
 
 from bizatlas.config import get_settings
 from bizatlas.temporal.activities import (
