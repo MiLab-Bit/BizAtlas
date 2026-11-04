@@ -2,11 +2,11 @@
 # REL-10 · 部署脚本：按 tag/ref 拉取 -> 重启服务 -> 健康检查 -> 失败自动回退
 #
 # 用法：
-#   bash scripts/deploy.sh --detect        # 只读体检：认成什么服务 / 端口 / 健康端点，不做任何改动
-#   bash scripts/deploy.sh <tag|ref>       # 真正部署
+#   APP_DIR=/opt/bizatlas bash scripts/deploy.sh --detect  # 只读体检
+#   APP_DIR=/opt/bizatlas bash scripts/deploy.sh <tag|ref>   # 真正部署
 #
-# 可用环境变量（全部可选）：
-#   APP_DIR           代码目录，默认 /opt/lifetrip
+# 环境变量：
+#   APP_DIR           必填代码目录；不允许跨应用共享错误默认值
 #   SERVICE           systemd 服务名；不设则自动识别（识别结果必须真的指向 APP_DIR）
 #   PORT              服务端口；不设则从单元文件里读
 #   HEALTH_PATH       健康端点路径；不设则按候选列表探测
@@ -18,7 +18,13 @@
 #   FORCE_SERVICE=1   允许 SERVICE 与 APP_DIR 不一致（默认不允许，见下方护栏）
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/opt/lifetrip}"
+# Fail closed before reading service metadata or attempting any git/systemd action.
+# This script is copied between projects; a shared default would target the
+# wrong service whenever a caller forgets to select the intended APP_DIR.
+if [ -z "${APP_DIR:-}" ]; then
+  printf '错误：必须显式指定 APP_DIR，例如 APP_DIR=/opt/bizatlas bash scripts/deploy.sh --detect\n' >&2
+  exit 2
+fi
 TARGET_ENV="${TARGET_ENV:-staging}"
 WANT_KEEP="${KEEP_COMMITS:-5}"
 
