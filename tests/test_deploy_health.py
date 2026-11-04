@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -44,19 +42,21 @@ def test_metrics_endpoint(client):
 
 # —— RBAC 门禁（开启鉴权后）——
 @pytest.fixture
-def auth_client():
+def auth_client(monkeypatch):
+    """Restore the actual pre-test auth configuration, even if assertions fail."""
     secret = "test-secret-phase3"
-    os.environ["BIZATLAS_AUTH_SECRET"] = secret
-    os.environ["BIZATLAS_AUTH_DISABLED"] = "false"
-    get_settings.cache_clear()
-    from apps.api.app.main import app
+    try:
+        with monkeypatch.context() as env:
+            env.setenv("BIZATLAS_AUTH_SECRET", secret)
+            env.setenv("BIZATLAS_AUTH_DISABLED", "false")
+            get_settings.cache_clear()
+            from apps.api.app.main import app
 
-    c = TestClient(app)
-    yield c, secret
-    # 还原，避免影响其他用例
-    os.environ.pop("BIZATLAS_AUTH_SECRET", None)
-    os.environ["BIZATLAS_AUTH_DISABLED"] = "true"
-    get_settings.cache_clear()
+            with TestClient(app) as client:
+                yield client, secret
+    finally:
+        # The context has already restored the original environment here.
+        get_settings.cache_clear()
 
 
 def _headers(role: Role, secret: str) -> dict:
