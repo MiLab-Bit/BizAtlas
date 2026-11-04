@@ -22,7 +22,7 @@ set -euo pipefail
 # This script is copied between projects; a shared default would target the
 # wrong service whenever a caller forgets to select the intended APP_DIR.
 if [ -z "${APP_DIR:-}" ]; then
-  printf '错误：必须显式指定 APP_DIR，例如 APP_DIR=/opt/bizatlas bash scripts/deploy.sh --detect\\n' >&2
+  printf '错误：必须显式指定 APP_DIR，例如 APP_DIR=/opt/bizatlas bash scripts/deploy.sh --detect\n' >&2
   exit 2
 fi
 TARGET_ENV="${TARGET_ENV:-staging}"
