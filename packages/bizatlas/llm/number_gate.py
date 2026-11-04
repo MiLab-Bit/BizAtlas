@@ -126,9 +126,15 @@ def gate_or_fallback(text: str | None, fallback: str, allowed: set[float]) -> tu
     # 少量可疑数字：标注后保留（比全盘丢弃更好）
     if len(offenders) <= 2:
         annotated = text.strip()
-        for off in offenders:
-            # 把可疑数字旁边加 [待核验] 标注
-            off_str = str(int(off)) if off == int(off) else str(off)
-            annotated = annotated.replace(off_str, f"{off_str}[待核验]", 1)
+        # Numeric comparison may normalize "99%" to 0.99; annotation must use
+        # the original text spans, not the normalized numeric string.
+        spans = [
+            match.end()
+            for match, value in zip(_NUM_RE.finditer(annotated), extract_numbers(annotated))
+            if not any(_close(value, permitted) for permitted in allowed)
+        ]
+        # Insert right-to-left to preserve the original match offsets.
+        for end in reversed(spans):
+            annotated = annotated[:end] + "[待核验]" + annotated[end:]
         return annotated, True  # 返回 True 因为大部分内容是可用的
     return fallback, False
