@@ -89,3 +89,28 @@ def test_gate_or_fallback():
     assert a5 is False and t5 == "fb"
     t6, a6 = gate_or_fallback("   ", "fb", allowed)
     assert a6 is False and t6 == "fb"
+
+
+def test_gate_or_fallback_annotates_original_percent_spans():
+    # Issue #3: the normalized value 0.99 does not occur verbatim in "99%".
+    allowed = {0.78}
+    assert gate_or_fallback("利润率99%", "fallback", allowed) == (
+        "利润率99%[待核验]", True,
+    )
+    assert gate_or_fallback("99%和99%", "fallback", allowed) == (
+        "99%[待核验]和99%[待核验]", True,
+    )
+    # Registered percent values still pass unchanged.
+    assert gate_or_fallback("利润率78%", "fallback", allowed) == (
+        "利润率78%", True,
+    )
+
+
+def test_gate_or_fallback_original_spans_decimals_and_threshold():
+    allowed = {0.78}
+    assert gate_or_fallback("风险 -0.99 和 0.55", "fallback", allowed) == (
+        "风险 -0.99[待核验] 和 0.55[待核验]", True,
+    )
+    assert gate_or_fallback("99% 98% 97%", "fallback", allowed) == (
+        "fallback", False,
+    )
