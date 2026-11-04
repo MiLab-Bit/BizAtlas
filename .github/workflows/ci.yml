@@ -24,10 +24,11 @@ jobs:
           pip install -r requirements.txt
       - name: Run tests with coverage gate
         run: |
-          pytest --cov=bizatlas --cov-report=term-missing --cov-fail-under=75 -q
+          pytest --cov=bizatlas --cov-report=term-missing --cov-report=xml:coverage.xml --cov-fail-under=75 -q
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage
-          path: .coverage
+          path: coverage.xml
+          if-no-files-found: error
