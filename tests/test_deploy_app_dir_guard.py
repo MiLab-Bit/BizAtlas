@@ -14,7 +14,7 @@ def test_deploy_requires_explicit_app_dir_before_touching_services(tmp_path: Pat
     marker = tmp_path / "called"
     for name in ("git", "systemctl", "curl"):
         fake = tmp_path / name
-        fake.write_text(f"#!/bin/sh\\nprintf '%s\\n' {name} >> {marker}\\nexit 99\\n")
+        fake.write_text(f"#!/bin/sh\nprintf '%s\n' {name} >> {marker}\nexit 99\n")
         fake.chmod(0o755)
     env = os.environ.copy()
     env.pop("APP_DIR", None)
