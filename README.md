@@ -65,4 +65,21 @@
 
 ---
 
+## 业务建模：把风险研判写成可审计的决策系统
+
+商舆的核心对象不是“一段 AI 回答”，而是 **企业、指标、证据、规则命中、风险结果、授信建议与尽调工作流**。财务数据与外部事件先映射为 `MetricValue`、`Evidence` 与 `RuleHit`，再通过 `risk/score.py` 的五维评分、否决与缺失数据策略形成 `RiskResult`；`credit/decision.py` 将评级进一步转为授信准入建议；`workflow/due_diligence.py` 管理清单和人工复核。
+
+**为什么这样设计：** 风险事实、模型推断和最终业务决策拥有不同的责任与证据要求。评分口径由 `ScoringSnapshot` 保存；数据不足为 `UNRATED`，而不是误判为 GREEN；新规则可处于 `pilot`，不立即参与正式计分。业务上的“未知不等于安全”因此成为可检查的程序行为。
+
+**源码入口：** [领域契约](packages/bizatlas/contracts/models.py) · [规则引擎](packages/bizatlas/rules/engine.py) · [风险评分](packages/bizatlas/risk/score.py) · [授信建议](packages/bizatlas/credit/decision.py) · [尽调流程](packages/bizatlas/workflow/due_diligence.py)。
+
+## 工程完成度与验证边界
+
+- **已在仓库中实现：** Pydantic 领域契约、YAML 规则匹配、风险评分与融合逻辑、证据引用、尽调状态、API、Web 和小程序代码；`tests/` 有规则风控、授信、数据摄取、数字真实性门禁、RBAC、工作流、Temporal 和黄金回归测试。
+- **可复核的工程配置：** [GitHub Actions CI](.github/workflows/ci.yml) 与项目内测试。存在测试和 CI 配置不等于最新提交全部通过，实际状态应以对应 commit 的运行记录为准。
+- **尚需独立验证：** 真实金融数据的完整性与授权、评分预测校准、真实业务中的人工审批效果、生产级可用性与跨系统端到端验收。授信结果是辅助决策建议，不是自动放款承诺。
+
+
+---
+
 © 商舆 BizAtlas · MiLab-Bit
