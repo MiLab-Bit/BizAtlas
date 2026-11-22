@@ -316,16 +316,16 @@ def enrich_risk(
     reasons = build_reason_codes(risk.dimensions, distress, behavioral, hits=hits, top_n=8)
 
     # The distress model contains an unvalidated Ohlson probability.
-    # Keep its diagnostic outputs but do not expose that value as empirical PD.
+    # Keep its diagnostic outputs but do not expose any heuristic PD numerically.
     distress_public = dict(distress)
     if "pd" in distress_public:
-        distress_public["heuristic_prior_pd_internal_only"] = distress_public.pop("pd")
+        distress_public.pop("pd")
     if isinstance(distress_public.get("models"), dict):
         models = dict(distress_public["models"])
         if isinstance(models.get("ohlson"), dict):
             ohlson = dict(models["ohlson"])
             if "pd" in ohlson:
-                ohlson["heuristic_prior_pd_internal_only"] = ohlson.pop("pd")
+                ohlson.pop("pd")
             models["ohlson"] = ohlson
         distress_public["models"] = models
 
@@ -351,11 +351,11 @@ def enrich_risk(
             "pd_status": publication.status.value,
             "pd_publication_reason": publication.reason,
             "can_publish_as_empirical_pd": publication.can_publish_as_empirical_pd,
-            "heuristic_prior_pd_internal_only": cal.pd,
-            "lgd_prior_internal_only": cal.lgd,
+            "prior_probability_suppressed": True,
+            "lgd_prior_suppressed": True,
             "expected_loss": None,
             "master_scale": None,
-            "rationale": cal.rationale,
+            "rationale": ["未通过独立标签与时间外验证，PD/LGD/EL 不对外提供"],
         },
     }
     risk.scoring.scoring_version = "2.0.1"
