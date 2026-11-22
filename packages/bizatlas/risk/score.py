@@ -15,7 +15,8 @@ from bizatlas.contracts.models import (
     VetoInfo,
 )
 from bizatlas.risk.behavioral import compute_behavioral
-from bizatlas.risk.calibration import calibrate, master_scale_from_pd
+from bizatlas.risk.calibration import calibrate
+from bizatlas.risk.calibration_contract import assess_probability_publication
 from bizatlas.risk.distress import compute_distress
 from bizatlas.risk.reason_codes import build_reason_codes
 
@@ -305,8 +306,11 @@ def enrich_risk(
 
     # PD + 10 级主标尺（calibration 层）
     cal = calibrate(risk.model_dump(mode="json"))
-    risk.pd = cal.pd
-    risk.master_scale = cal.master_scale
+    publication = assess_probability_publication(cal.pd)
+    # No independently validated calibration exists: public PD must be absent.
+    # Preserve the heuristic only as explicitly labeled internal scenario data.
+    risk.pd = None
+    risk.master_scale = None
 
     # FICO 式 reason codes
     reasons = build_reason_codes(risk.dimensions, distress, behavioral, hits=hits, top_n=8)
@@ -329,10 +333,14 @@ def enrich_risk(
         "behavioral": behavioral,
         "reason_codes": reasons,
         "calibration": {
-            "pd": cal.pd,
-            "lgd": cal.lgd,
-            "expected_loss": cal.expected_loss,
-            "master_scale": cal.master_scale,
+            "pd": None,
+            "pd_status": publication.status.value,
+            "pd_publication_reason": publication.reason,
+            "can_publish_as_empirical_pd": publication.can_publish_as_empirical_pd,
+            "heuristic_prior_pd_internal_only": cal.pd,
+            "lgd_prior_internal_only": cal.lgd,
+            "expected_loss": None,
+            "master_scale": None,
             "rationale": cal.rationale,
         },
     }
