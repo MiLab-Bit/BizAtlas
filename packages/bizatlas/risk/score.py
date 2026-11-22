@@ -315,6 +315,17 @@ def enrich_risk(
     # FICO 式 reason codes
     reasons = build_reason_codes(risk.dimensions, distress, behavioral, hits=hits, top_n=8)
 
+    # The distress model contains an unvalidated Ohlson probability.
+    # Keep its diagnostic outputs but do not expose that value as empirical PD.
+    distress_public = dict(distress)
+    if "pd" in distress_public:
+        distress_public["heuristic_prior_pd_internal_only"] = distress_public.pop("pd")
+    if isinstance(distress_public.get("ohlson"), dict):
+        ohlson = dict(distress_public["ohlson"])
+        if "pd" in ohlson:
+            ohlson["heuristic_prior_pd_internal_only"] = ohlson.pop("pd")
+        distress_public["ohlson"] = ohlson
+
     risk.modules = {
         "version": "2.0.1",
         "fusion_mode": "rule_baseline_uplift",
@@ -329,7 +340,7 @@ def enrich_risk(
             "behavioral": beh_sev,
         },
         **blend_audit,
-        "distress": distress,
+        "distress": distress_public,
         "behavioral": behavioral,
         "reason_codes": reasons,
         "calibration": {
