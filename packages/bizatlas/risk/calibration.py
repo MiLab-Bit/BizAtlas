@@ -216,20 +216,33 @@ def ks(y_true: list[int], y_score: list[float]) -> float:
     return round(best, 4)
 
 
-def fit(y_true: list[int], y_score: list[float]) -> dict[str, float]:
-    """用真实违约标签重新估计 logistic 系数（最小二乘式网格锚定）。
+def fit(y_true: list[int], y_score: list[float]) -> dict[str, float | str]:
+    """Fit a logistic calibration map by minimizing Brier loss, not AUC.
 
-    当前为轻量实现：固定斜率网格，选使 AUC 最大的截距偏移。生产应替换为
-    带正则的极大似然（如 sklearn.LogisticRegression）；此处保持零依赖、可审计。
+    This is an offline, zero-dependency demonstrator. A model is NOT eligible
+    for empirical PD publication until an independent holdout, label audit,
+    and provenance checks have passed. Training and evaluation must be split.
     """
-    if len(set(y_true)) < 2:
-        return {"a": CAL_A, "b": CAL_B, "note": "标签不足，返回先验系数"}
-    best_a, best_b, best_auc = CAL_A, CAL_B, -1.0
-    for b in (0.03, 0.04, 0.045, 0.05, 0.06):
-        for a_off in (-1.0, -0.5, 0.0, 0.5, 1.0):
-            a = CAL_A + a_off
+    if (
+        len(y_true) != len(y_score)
+        or len(y_true) < 20
+        or any(y not in (0, 1) for y in y_true)
+        or any(not math.isfinite(float(s)) for s in y_score)
+        or len(set(y_true)) < 2
+    ):
+        return {"a": CAL_A, "b": CAL_B, "note": "insufficient_or_invalid_labels; prior_only"}
+    best_a, best_b, best_loss = CAL_A, CAL_B, float("inf")
+    # Intercept changes probability calibration but cannot change AUC.
+    for b in (0.0, 0.02, 0.04, 0.06, 0.08, 0.10, 0.12):
+        for a_step in range(-120, 41):
+            a = a_step / 10.0
             preds = [logistic_pd(s, a=a, b=b) for s in y_score]
-            v = auc(y_true, preds)
-            if v == v and v > best_auc:  # 跳过 nan
-                best_auc, best_a, best_b = v, a, b
-    return {"a": round(best_a, 4), "b": round(best_b, 4), "auc": round(best_auc, 4)}
+            loss = sum((p - y) ** 2 for p, y in zip(preds, y_true)) / len(y_true)
+            if loss < best_loss:
+                best_loss, best_a, best_b = loss, a, b
+    return {
+        "a": round(best_a, 4),
+        "b": round(best_b, 4),
+        "brier_train": round(best_loss, 6),
+        "note": "in_sample_fit_only; independent_holdout_required",
+    }
