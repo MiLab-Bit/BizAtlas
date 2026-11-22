@@ -320,11 +320,14 @@ def enrich_risk(
     distress_public = dict(distress)
     if "pd" in distress_public:
         distress_public["heuristic_prior_pd_internal_only"] = distress_public.pop("pd")
-    if isinstance(distress_public.get("ohlson"), dict):
-        ohlson = dict(distress_public["ohlson"])
-        if "pd" in ohlson:
-            ohlson["heuristic_prior_pd_internal_only"] = ohlson.pop("pd")
-        distress_public["ohlson"] = ohlson
+    if isinstance(distress_public.get("models"), dict):
+        models = dict(distress_public["models"])
+        if isinstance(models.get("ohlson"), dict):
+            ohlson = dict(models["ohlson"])
+            if "pd" in ohlson:
+                ohlson["heuristic_prior_pd_internal_only"] = ohlson.pop("pd")
+            models["ohlson"] = ohlson
+        distress_public["models"] = models
 
     risk.modules = {
         "version": "2.0.1",
