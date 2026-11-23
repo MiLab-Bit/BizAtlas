@@ -44,6 +44,14 @@ def infer_logistic_as_of(
     # A missing ranking score is the only expected pre-inference rejection.
     if admitted.reason != "invalid_model_score":
         return admitted
+    # This trainer has no learned missing-value imputation. Optional absent
+    # features must abstain rather than silently become zero.
+    if any(value is None for value in assembled.values.values()):
+        return ModelInference(
+            manifest.model_id, manifest.version, None, None, "ABSTAIN",
+            tuple(name for name, value in assembled.values.items() if value is None),
+            "missing_feature_without_imputation"
+        )
     score = artifact.score({
         name: float(value) for name, value in assembled.values.items()
         if value is not None
