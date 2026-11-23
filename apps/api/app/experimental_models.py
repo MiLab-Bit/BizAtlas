@@ -14,7 +14,6 @@ from pydantic import BaseModel, Field
 
 from apps.api.auth_deps import get_principal
 from bizatlas.contracts.models import AnalyzeRequest, Envelope, RiskResult
-from bizatlas.data.temporal_evidence import LicenseStatus
 from bizatlas.data.evidence_catalog import read_evidence
 from bizatlas.orchestrator.analyze import run_analyze
 from bizatlas.risk.feature_bridge import FeatureObservation
@@ -33,25 +32,13 @@ class FeatureInput(BaseModel):
     unit: str
 
 
-class EvidenceInput(BaseModel):
-    evidence_id: str
-    source_id: str
-    source_sha256: str
-    occurred_at: datetime | None = None
-    effective_from: datetime | None = None
-    effective_until: datetime | None = None
-    published_at: datetime | None = None
-    ingested_at: datetime | None = None
-    license_status: LicenseStatus = LicenseStatus.UNVERIFIED
-
-
 class ExperimentalRiskRequest(BaseModel):
     company_id: str = Field(min_length=1)
     model_id: str = Field(min_length=1)
     model_version: str = Field(min_length=1)
     observation_at: datetime
     features: list[FeatureInput] = Field(default_factory=list, max_length=128)
-    evidence: list[EvidenceInput] = Field(default_factory=list, max_length=128)
+    evidence_ids: list[str] = Field(default_factory=list, max_length=128)
 
 
 @router.post("/v1/experimental-models/risk")
@@ -69,6 +56,8 @@ def experimental_model_risk(
     evidence_root = os.environ.get("BIZATLAS_MODEL_EVIDENCE_DIR")
     if not manifest_root or not artifact_root or not evidence_root:
         raise HTTPException(status_code=503, detail="experimental model registry not configured")
+    if len(set(request.evidence_ids)) != len(request.evidence_ids):
+        raise HTTPException(status_code=422, detail="duplicate evidence IDs")
     try:
         analysis = run_analyze(AnalyzeRequest(
             company_id=request.company_id,
@@ -86,7 +75,7 @@ def experimental_model_risk(
                 version=request.model_version,
                 observation_at=request.observation_at,
                 features=tuple(FeatureObservation(**item.model_dump()) for item in request.features),
-                evidence=tuple(read_evidence(Path(evidence_root), item.evidence_id) for item in request.evidence),
+                evidence=tuple(read_evidence(Path(evidence_root), evidence_id) for evidence_id in request.evidence_ids),
             ),
             manifest_directory=Path(manifest_root),
             artifact_directory=Path(artifact_root),
