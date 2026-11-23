@@ -1,6 +1,6 @@
 """Opt-in, non-decisional experimental risk model endpoint.
 
-All submitted feature/evidence metadata is client-supplied and untrusted.
+Feature values and evidence IDs are client-supplied and untrusted.\nTemporal and authorization claims are loaded only from server-managed records.
 This endpoint NEVER approves a credit decision or publishes empirical PD.
 """
 from __future__ import annotations
@@ -14,7 +14,8 @@ from pydantic import BaseModel, Field
 
 from apps.api.auth_deps import get_principal
 from bizatlas.contracts.models import AnalyzeRequest, Envelope, RiskResult
-from bizatlas.data.temporal_evidence import LicenseStatus, TemporalEvidence
+from bizatlas.data.temporal_evidence import LicenseStatus
+from bizatlas.data.evidence_catalog import read_evidence
 from bizatlas.orchestrator.analyze import run_analyze
 from bizatlas.risk.feature_bridge import FeatureObservation
 from bizatlas.risk.model_service import (
@@ -65,7 +66,8 @@ def experimental_model_risk(
     """
     manifest_root = os.environ.get("BIZATLAS_MODEL_MANIFEST_DIR")
     artifact_root = os.environ.get("BIZATLAS_MODEL_ARTIFACT_DIR")
-    if not manifest_root or not artifact_root:
+    evidence_root = os.environ.get("BIZATLAS_MODEL_EVIDENCE_DIR")
+    if not manifest_root or not artifact_root or not evidence_root:
         raise HTTPException(status_code=503, detail="experimental model registry not configured")
     try:
         analysis = run_analyze(AnalyzeRequest(
@@ -84,7 +86,7 @@ def experimental_model_risk(
                 version=request.model_version,
                 observation_at=request.observation_at,
                 features=tuple(FeatureObservation(**item.model_dump()) for item in request.features),
-                evidence=tuple(TemporalEvidence(**item.model_dump()) for item in request.evidence),
+                evidence=tuple(read_evidence(Path(evidence_root), item.evidence_id) for item in request.evidence),
             ),
             manifest_directory=Path(manifest_root),
             artifact_directory=Path(artifact_root),
@@ -98,7 +100,7 @@ def experimental_model_risk(
         data={
             "risk": enriched.model_dump(mode="json"),
             "experimental_only": True,
-            "evidence_attestation": "CLIENT_SUPPLIED_UNVERIFIED",
+            "evidence_attestation": "SERVER_CATALOG_REFERENCE_NOT_INDEPENDENT_LICENSE_PROOF",
             "decision_authority": False,
         },
         meta={"mode": "experimental", "empirical_pd_authorized": False},
