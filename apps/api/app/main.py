@@ -1495,6 +1495,10 @@ app.add_middleware(AuthEnforcementMiddleware)
 from apps.api.app.routers_extra import router as _extra_router
 app.include_router(_extra_router)
 
+# Experimental model diagnostics are opt-in and never change credit decisions.
+from apps.api.app.experimental_models import router as _experimental_model_router
+app.include_router(_experimental_model_router)
+
 
 # ==================================================================
 # 贷前审批场景聚焦 · 授信准入决策 / 评分有效性验证 / 数据授权与合规
