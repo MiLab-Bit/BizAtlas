@@ -50,6 +50,7 @@ class EventLabel:
 
 def label_credit_event(
     *,
+    company_id: str,
     event_type: CreditEventType,
     observation_date: date,
     horizon_end: date,
@@ -64,6 +65,10 @@ def label_credit_event(
     It does not allow future announcements into as-of features. A label is
     negative only with explicit complete history and full horizon coverage.
     """
+    if not company_id:
+        raise ValueError("company_id required")
+    if any(e.company_id != company_id for e in events):
+        raise ValueError("cross-company credit event history")
     if horizon_end <= observation_date:
         raise ValueError("horizon_end must be later than observation_date")
     if coverage_end is None:
@@ -75,6 +80,7 @@ def label_credit_event(
             if e.kind is event_type
             and observation_date < e.effective_date <= horizon_end
             and e.announced_date is not None
+            and e.effective_date <= coverage_end
             and e.announced_date <= coverage_end
             and (not require_independent_verification or e.independently_verified)
         ),
