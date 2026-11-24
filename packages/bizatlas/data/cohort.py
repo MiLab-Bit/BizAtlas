@@ -77,6 +77,7 @@ def build_cohort(
             excluded.append(CohortExclusion(c.entity_id, "inadmissible_features:" + ",".join(reasons)))
             continue
         label = label_credit_event(
+            company_id=c.entity_id,
             event_type=label_type,
             observation_date=c.observation_at.date(),
             horizon_end=c.horizon_end,
