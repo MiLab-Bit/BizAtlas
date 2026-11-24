@@ -14,9 +14,8 @@ from pydantic import BaseModel, Field
 
 from apps.api.auth_deps import get_principal
 from bizatlas.contracts.models import AnalyzeRequest, Envelope, RiskResult
-from bizatlas.data.evidence_catalog import read_evidence
+from bizatlas.data.company_facts import read_company_fact
 from bizatlas.orchestrator.analyze import run_analyze
-from bizatlas.risk.feature_bridge import FeatureObservation
 from bizatlas.risk.model_service import (
     ExperimentalModelRequest,
     apply_registered_experimental_model,
@@ -25,19 +24,11 @@ from bizatlas.risk.model_service import (
 router = APIRouter()
 
 
-class FeatureInput(BaseModel):
-    name: str
-    value: float | None
-    evidence_id: str
-    unit: str
-
-
 class ExperimentalRiskRequest(BaseModel):
     company_id: str = Field(min_length=1)
     model_id: str = Field(min_length=1)
     model_version: str = Field(min_length=1)
     observation_at: datetime
-    features: list[FeatureInput] = Field(default_factory=list, max_length=128)
     evidence_ids: list[str] = Field(default_factory=list, max_length=128)
 
 
@@ -48,8 +39,7 @@ def experimental_model_risk(
 ) -> Envelope[dict]:
     """Return a diagnostic risk model result beside the existing rules score.
 
-    Model directories are configured server-side only. No caller-supplied
-    filesystem path, artifact or manifest is accepted.
+    Model and fact directories are configured server-side only.
     """
     manifest_root = os.environ.get("BIZATLAS_MODEL_MANIFEST_DIR")
     artifact_root = os.environ.get("BIZATLAS_MODEL_ARTIFACT_DIR")
@@ -59,6 +49,7 @@ def experimental_model_risk(
     if len(set(request.evidence_ids)) != len(request.evidence_ids):
         raise HTTPException(status_code=422, detail="duplicate evidence IDs")
     try:
+        facts = [read_company_fact(Path(evidence_root), request.company_id, eid) for eid in request.evidence_ids]
         analysis = run_analyze(AnalyzeRequest(
             company_id=request.company_id,
             intent="analyze_risk",
@@ -74,8 +65,8 @@ def experimental_model_risk(
                 model_id=request.model_id,
                 version=request.model_version,
                 observation_at=request.observation_at,
-                features=tuple(FeatureObservation(**item.model_dump()) for item in request.features),
-                evidence=tuple(read_evidence(Path(evidence_root), evidence_id) for evidence_id in request.evidence_ids),
+                features=tuple(fact for fact, _ in facts),
+                evidence=tuple(evidence for _, evidence in facts),
             ),
             manifest_directory=Path(manifest_root),
             artifact_directory=Path(artifact_root),
@@ -89,7 +80,7 @@ def experimental_model_risk(
         data={
             "risk": enriched.model_dump(mode="json"),
             "experimental_only": True,
-            "evidence_attestation": "SERVER_CATALOG_REFERENCE_NOT_INDEPENDENT_LICENSE_PROOF",
+            "evidence_attestation": "SERVER_FACT_DIGEST_AND_COMPANY_BOUND_NOT_INDEPENDENT_LICENSE_PROOF",
             "decision_authority": False,
         },
         meta={"mode": "experimental", "empirical_pd_authorized": False},
