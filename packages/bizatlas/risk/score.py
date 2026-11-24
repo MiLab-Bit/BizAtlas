@@ -15,7 +15,8 @@ from bizatlas.contracts.models import (
     VetoInfo,
 )
 from bizatlas.risk.behavioral import compute_behavioral
-from bizatlas.risk.calibration import calibrate, master_scale_from_pd
+from bizatlas.risk.calibration import calibrate
+from bizatlas.risk.calibration_contract import assess_probability_publication
 from bizatlas.risk.distress import compute_distress
 from bizatlas.risk.reason_codes import build_reason_codes
 
@@ -305,11 +306,28 @@ def enrich_risk(
 
     # PD + 10 级主标尺（calibration 层）
     cal = calibrate(risk.model_dump(mode="json"))
-    risk.pd = cal.pd
-    risk.master_scale = cal.master_scale
+    publication = assess_probability_publication(cal.pd)
+    # No independently validated calibration exists: public PD must be absent.
+    # Preserve the heuristic only as explicitly labeled internal scenario data.
+    risk.pd = None
+    risk.master_scale = None
 
     # FICO 式 reason codes
     reasons = build_reason_codes(risk.dimensions, distress, behavioral, hits=hits, top_n=8)
+
+    # The distress model contains an unvalidated Ohlson probability.
+    # Keep its diagnostic outputs but do not expose any heuristic PD numerically.
+    distress_public = dict(distress)
+    if "pd" in distress_public:
+        distress_public.pop("pd")
+    if isinstance(distress_public.get("models"), dict):
+        models = dict(distress_public["models"])
+        if isinstance(models.get("ohlson"), dict):
+            ohlson = dict(models["ohlson"])
+            if "pd" in ohlson:
+                ohlson.pop("pd")
+            models["ohlson"] = ohlson
+        distress_public["models"] = models
 
     risk.modules = {
         "version": "2.0.1",
@@ -325,15 +343,19 @@ def enrich_risk(
             "behavioral": beh_sev,
         },
         **blend_audit,
-        "distress": distress,
+        "distress": distress_public,
         "behavioral": behavioral,
         "reason_codes": reasons,
         "calibration": {
-            "pd": cal.pd,
-            "lgd": cal.lgd,
-            "expected_loss": cal.expected_loss,
-            "master_scale": cal.master_scale,
-            "rationale": cal.rationale,
+            "pd": None,
+            "pd_status": publication.status.value,
+            "pd_publication_reason": publication.reason,
+            "can_publish_as_empirical_pd": publication.can_publish_as_empirical_pd,
+            "prior_probability_suppressed": True,
+            "lgd_prior_suppressed": True,
+            "expected_loss": None,
+            "master_scale": None,
+            "rationale": ["未通过独立标签与时间外验证，PD/LGD/EL 不对外提供"],
         },
     }
     risk.scoring.scoring_version = "2.0.1"

@@ -1,0 +1,87 @@
+"""Opt-in, non-decisional experimental risk model endpoint.
+
+Feature values and evidence IDs are client-supplied and untrusted.\nTemporal and authorization claims are loaded only from server-managed records.
+This endpoint NEVER approves a credit decision or publishes empirical PD.
+"""
+from __future__ import annotations
+
+from datetime import datetime
+import os
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+
+from apps.api.auth_deps import get_principal
+from bizatlas.contracts.models import AnalyzeRequest, Envelope, RiskResult
+from bizatlas.data.company_facts import read_company_fact
+from bizatlas.orchestrator.analyze import run_analyze
+from bizatlas.risk.model_service import (
+    ExperimentalModelRequest,
+    apply_registered_experimental_model,
+)
+
+router = APIRouter()
+
+
+class ExperimentalRiskRequest(BaseModel):
+    company_id: str = Field(min_length=1)
+    model_id: str = Field(min_length=1)
+    model_version: str = Field(min_length=1)
+    observation_at: datetime
+    evidence_ids: list[str] = Field(default_factory=list, max_length=128)
+
+
+@router.post("/v1/experimental-models/risk")
+def experimental_model_risk(
+    request: ExperimentalRiskRequest,
+    principal=Depends(get_principal),
+) -> Envelope[dict]:
+    """Return a diagnostic risk model result beside the existing rules score.
+
+    Model and fact directories are configured server-side only.
+    """
+    manifest_root = os.environ.get("BIZATLAS_MODEL_MANIFEST_DIR")
+    artifact_root = os.environ.get("BIZATLAS_MODEL_ARTIFACT_DIR")
+    evidence_root = os.environ.get("BIZATLAS_MODEL_EVIDENCE_DIR")
+    if not manifest_root or not artifact_root or not evidence_root:
+        raise HTTPException(status_code=503, detail="experimental model registry not configured")
+    if len(set(request.evidence_ids)) != len(request.evidence_ids):
+        raise HTTPException(status_code=422, detail="duplicate evidence IDs")
+    try:
+        facts = [read_company_fact(Path(evidence_root), request.company_id, eid) for eid in request.evidence_ids]
+        analysis = run_analyze(AnalyzeRequest(
+            company_id=request.company_id,
+            intent="analyze_risk",
+            options={"fast": True, "skip_polish": True},
+        ))
+        risk_payload = analysis.get("risk")
+        if not isinstance(risk_payload, dict):
+            raise HTTPException(status_code=409, detail="risk result unavailable")
+        risk = RiskResult.model_validate(risk_payload)
+        enriched = apply_registered_experimental_model(
+            risk,
+            ExperimentalModelRequest(
+                model_id=request.model_id,
+                version=request.model_version,
+                observation_at=request.observation_at,
+                features=tuple(fact for fact, _ in facts),
+                evidence=tuple(evidence for _, evidence in facts),
+            ),
+            manifest_directory=Path(manifest_root),
+            artifact_directory=Path(artifact_root),
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="registered model not found") from exc
+    except (ValueError, TypeError, KeyError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return Envelope(
+        ok=True,
+        data={
+            "risk": enriched.model_dump(mode="json"),
+            "experimental_only": True,
+            "evidence_attestation": "SERVER_FACT_DIGEST_AND_COMPANY_BOUND_NOT_INDEPENDENT_LICENSE_PROOF",
+            "decision_authority": False,
+        },
+        meta={"mode": "experimental", "empirical_pd_authorized": False},
+    )
